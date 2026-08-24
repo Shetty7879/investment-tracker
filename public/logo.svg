@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Metallic gold gradients -->
+    <linearGradient id="goldGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDF0CD" />
+      <stop offset="20%" stop-color="#D4AF37" />
+      <stop offset="45%" stop-color="#AA7C11" />
+      <stop offset="60%" stop-color="#F3E5AB" />
+      <stop offset="80%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#5C4308" />
+    </linearGradient>
+    <linearGradient id="goldGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.6"/>
+      <stop offset="30%" stop-color="#D4AF37" />
+      <stop offset="70%" stop-color="#7A580C" />
+      <stop offset="100%" stop-color="#3A2502" />
+    </linearGradient>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Glowing shadow under the F -->
+  <path d="M 210,120 L 400,120 C 420,120 430,135 410,165 C 390,195 360,205 320,205 L 260,205 L 260,265 L 360,265 C 380,265 390,275 380,295 C 370,315 340,325 310,325 L 260,325 L 260,400 L 210,400 Z" fill="#D4AF37" opacity="0.15" filter="url(#glow)" />
+
+  <!-- Base 3D shadow layer -->
+  <path d="M 214,124 L 404,124 C 424,124 434,139 414,169 C 394,199 364,209 324,209 L 264,209 L 264,269 L 364,269 C 384,269 394,279 384,299 C 374,319 344,329 314,329 L 264,329 L 264,404 L 214,404 Z" fill="url(#goldGrad2)" />
+
+  <!-- Main F Shape -->
+  <path d="M 210,120 L 400,120 C 420,120 430,135 410,165 C 390,195 360,205 320,205 L 260,205 L 260,265 L 360,265 C 380,265 390,275 380,295 C 370,315 340,325 310,325 L 260,325 L 260,400 L 210,400 Z" fill="url(#goldGrad1)" />
+
+  <!-- Arrow structure cutting from bottom-left to center-right -->
+  <g filter="url(#glow)">
+    <!-- Shadow for Arrow -->
+    <path d="M 194,404 L 324,274 L 294,254 L 374,234 L 354,314 L 334,294 L 214,414 Z" fill="#2A1B02" opacity="0.4" />
+    <!-- Golden Arrow -->
+    <path d="M 190,400 L 320,270 L 290,250 L 370,230 L 350,310 L 330,290 L 210,410 Z" fill="url(#goldGrad1)" />
+    <!-- White Highlight on Arrow Stem -->
+    <path d="M 200,395 L 310,285" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.6" />
+  </g>
+</svg>
