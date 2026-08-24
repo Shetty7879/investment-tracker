@@ -9,6 +9,7 @@ import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { MoneyTracker } from './pages/MoneyTracker';
 import { Toast } from './components/Toast';
+import { PageTransition } from './components/PageTransition';
 
 const AppContent: React.FC = () => {
   const { activeTab } = useApp();
@@ -36,7 +37,7 @@ const AppContent: React.FC = () => {
 
   return (
     <DashboardLayout>
-      {renderActiveView()}
+      <PageTransition>{renderActiveView()}</PageTransition>
       <Toast />
     </DashboardLayout>
   );

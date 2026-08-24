@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../contexts/AppContext';
+import SplashScreen from '../components/SplashScreen';
 import {
   LayoutDashboard,
   Briefcase,
@@ -52,10 +53,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   };
 
   return (
-    <div className="min-height-screen flex flex-col bg-[#f8fafc] text-slate-800 dark:bg-[#08090d] dark:text-slate-100 min-h-screen transition-colors duration-200">
+    <div className="min-height-screen flex flex-col bg-[#f8fafc] text-slate-800 dark:bg-[#08090d] dark:text-slate-100 min-h-screen transition-colors duration-200 animate-fade-in">
+      <SplashScreen />
       <div className="flex flex-1">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex flex-col w-64 border-r border-slate-200 dark:border-slate-850 bg-white dark:bg-[#0d0f17] shrink-0 sticky top-0 h-screen">
+        <aside className="hidden lg:flex flex-col w-64 border-r border-slate-200 dark:border-slate-850 bg-white dark:bg-[#0d0f17] shrink-0 sticky top-0 h-screen animate-slide-in">
           {/* Logo Section */}
           <div className="p-6 border-b border-slate-150 dark:border-slate-850 flex items-center gap-3">
             <img src="/logo.svg" alt="Logo" className="h-9 w-9 object-contain" />
@@ -143,7 +145,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           </header>
 
           {/* Main Dashboard Container */}
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto">
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto animate-fade-in">
             {children}
           </main>
         </div>

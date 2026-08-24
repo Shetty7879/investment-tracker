@@ -8,9 +8,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
     <title>Investment Tracker</title>
-  </head>
+    <link rel="stylesheet" href="splash.css">
+</head>
   <body>
+  <div id="splash" class="splash-overlay" aria-hidden="true">
+    <img src="/favicon.svg" alt="FridayTrack logo" class="splash-logo" />
+    <div class="splash-title">FridayTrack</div>
+    <div class="splash-tagline">Track. Plan. Grow.</div>
+    <div class="splash-progress"></div>
+  </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-  </body>
+    <script src="splash.js"></script>
+</body>
 </html>

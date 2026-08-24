@@ -1,0 +1,74 @@
+/* splash.css – full‑screen overlay */
+.splash-overlay {
+  position: fixed;
+  inset: 0;
+  background: #111; /* existing dark background */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.splash-overlay.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+/* Logo animation */
+@keyframes logoFadeScale {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+.splash-logo {
+  width: 120px; height: auto;
+  animation: logoFadeScale 0.6s ease forwards;
+}
+/* Text animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.splash-title {
+  font-family: 'Playfair Display', serif;
+  color: var(--accent-color);
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin-top: 1rem;
+  animation: fadeInUp 0.6s ease forwards 0.4s;
+  opacity: 0;
+}
+.splash-tagline {
+  font-family: 'Montserrat', sans-serif;
+  color: #fff;
+  font-size: clamp(1rem, 3vw, 1.5rem);
+  margin-top: 0.5rem;
+  animation: fadeInUp 0.6s ease forwards 0.8s;
+  opacity: 0;
+}
+/* Simple progress bar */
+.splash-progress {
+  width: 30%;
+  height: 4px;
+  background: rgba(255,255,255,0.2);
+  margin-top: 2rem;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.splash-progress::before {
+  content: '';
+  display: block;
+  width: 0%;
+  height: 100%;
+  background: var(--accent-color);
+  animation: progress 1.2s linear forwards 0.6s;
+}
+@keyframes progress { to { width: 100%; } }
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .splash-overlay, .splash-logo, .splash-title, .splash-tagline, .splash-progress::before {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}
