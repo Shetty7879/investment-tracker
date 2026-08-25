@@ -3,6 +3,8 @@ import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import type { Investment } from '../types';
 import { InvestmentModal } from '../components/InvestmentModal';
+import { isCommodityCategory } from '../services/portfolioCalculationService';
+import { getInvestmentAge } from '../utils/calculations';
 import {
   Briefcase,
   Plus,
@@ -216,13 +218,14 @@ export const Investments: React.FC = () => {
                     <th className="px-4 py-4 text-right">Price</th>
                     <th className="px-4 py-4 text-right">Invested Amount</th>
                     <th className="px-4 py-4 text-center">Status / Date</th>
+                    <th className="px-4 py-4 text-center">Age</th>
                     <th className="px-6 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
                   {sortedInvestments.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-8 text-center text-slate-450 dark:text-slate-500">
+                      <td colSpan={9} className="px-6 py-8 text-center text-slate-450 dark:text-slate-550">
                         No records match the active filter criteria.
                       </td>
                     </tr>
@@ -305,13 +308,20 @@ export const Investments: React.FC = () => {
                           <td className="px-4 py-4 text-right text-slate-700 dark:text-slate-300 whitespace-nowrap font-bold">
                             {isIPORow
                               ? <span>{ipoAppliedLots} lot{ipoAppliedLots !== 1 ? 's' : ''}{ipoSharesPerLot > 0 ? ` × ${ipoSharesPerLot}` : ''}</span>
-                              : inv.quantity
+                              : isCommodityCategory(inv.category || inv.assetType)
+                                ? `${inv.weightGrams ?? inv.quantity} g`
+                                : inv.quantity
                             }
                           </td>
 
                           {/* Price */}
                           <td className="px-4 py-4 text-right text-slate-700 dark:text-slate-300 whitespace-nowrap font-bold">
-                            {isIPORow ? ipoPriceDisplay : formatCurrency(inv.buyPrice ?? 0)}
+                            {isIPORow
+                              ? ipoPriceDisplay
+                              : isCommodityCategory(inv.category || inv.assetType)
+                                ? `${formatCurrency(inv.buyPricePerGram ?? inv.buyPrice ?? 0)}/g`
+                                : formatCurrency(inv.buyPrice ?? 0)
+                            }
                           </td>
 
                           {/* Invested Amount */}
@@ -343,6 +353,11 @@ export const Investments: React.FC = () => {
                                 {inv.buyDate || inv.purchaseDate || '—'}
                               </span>
                             )}
+                          </td>
+
+                          {/* Age */}
+                          <td className="px-4 py-4 text-center whitespace-nowrap text-xs font-bold text-indigo-650 dark:text-indigo-400">
+                            {getInvestmentAge(isIPORow ? inv.applicationDate : (inv.buyDate || inv.purchaseDate))}
                           </td>
 
                           {/* Actions */}
@@ -489,20 +504,28 @@ export const Investments: React.FC = () => {
                               <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{ipoAllottedLots} lot{ipoAllottedLots !== 1 ? 's' : ''}</span>
                             </div>
                           )}
+                          <div className="col-span-2">
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">⏳ Age</span>
+                            <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{getInvestmentAge(inv.applicationDate || inv.buyDate || inv.purchaseDate)}</span>
+                          </div>
                         </>
                       ) : (
                         <>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">
-                              {inv.category === 'Mutual Funds' ? 'Units' : 'Quantity / Units'}
+                              {inv.category === 'Mutual Funds' ? 'Units' : isCommodityCategory(inv.category || inv.assetType) ? 'Weight (grams)' : 'Quantity / Units'}
                             </span>
-                            <span className="font-extrabold text-slate-900 dark:text-white">{inv.quantity}</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">
+                              {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} g` : inv.quantity}
+                            </span>
                           </div>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">
-                              {inv.category === 'Mutual Funds' ? 'NAV' : 'Buy Price / Price per Unit'}
+                              {inv.category === 'Mutual Funds' ? 'NAV' : isCommodityCategory(inv.category || inv.assetType) ? 'Buy Price per Gram' : 'Buy Price / Price per Unit'}
                             </span>
-                            <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(inv.buyPrice ?? 0)}</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white font-semibold">
+                              {isCommodityCategory(inv.category || inv.assetType) ? `${formatCurrency(inv.buyPricePerGram ?? inv.buyPrice ?? 0)}/g` : formatCurrency(inv.buyPrice ?? 0)}
+                            </span>
                           </div>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Invested Amount</span>
@@ -511,6 +534,10 @@ export const Investments: React.FC = () => {
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider mb-0.5">Buy Date</span>
                             <span className="font-extrabold text-slate-900 dark:text-white">{inv.buyDate || inv.purchaseDate || '—'}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">⏳ Age</span>
+                            <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{getInvestmentAge(inv.buyDate || inv.purchaseDate)}</span>
                           </div>
                         </>
                       )}

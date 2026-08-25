@@ -164,6 +164,22 @@ export const calculateInvestmentMetrics = (
   totalQuantity: number;   // Remaining quantity
   averageBuyPrice: number; // Average buy price of remaining holdings
 } => {
+  const type = inv.assetType || inv.category || '';
+  const isCommodity = type === 'Gold' || type === 'Silver' || type === 'Platinum' ||
+                      type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum';
+  if (isCommodity) {
+    return {
+      investedAmount: inv.investedAmount ?? 0,
+      currentValue: inv.currentValue ?? 0,
+      profitLoss: undefined as any,
+      returnPercent: undefined as any,
+      realizedPL: 0,
+      totalPL: 0,
+      totalQuantity: inv.weightGrams ?? inv.quantity ?? 0,
+      averageBuyPrice: inv.buyPricePerGram ?? inv.buyPrice ?? 0
+    };
+  }
+
   // 1. Gather transactions array. Auto-generate fallback BUY transaction if empty
   let txList: Transaction[] = [];
   if (inv.transactions && inv.transactions.length > 0) {
@@ -372,4 +388,61 @@ export const calculatePortfolioTotal = (
     totalPL: totalPL,
     returnPercentage
   };
+};
+
+/**
+ * Calculates the age of an investment from its buy date to the current date.
+ */
+export const getInvestmentAge = (dateStr: string | undefined): string => {
+  if (!dateStr) return '—';
+  
+  const parts = dateStr.split('-');
+  const buyYear = parseInt(parts[0], 10);
+  const buyMonth = parseInt(parts[1], 10) - 1; // 0-indexed month
+  const buyDay = parseInt(parts[2], 10);
+  
+  const buyMidnight = new Date(buyYear, buyMonth, buyDay);
+  const now = new Date();
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  const diffTime = nowMidnight.getTime() - buyMidnight.getTime();
+  if (diffTime < 0) {
+    return '0 days';
+  }
+  
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) {
+    return 'Today';
+  }
+  if (diffDays < 30) {
+    return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+  }
+  
+  // Calculate difference in months
+  let yearsDiff = now.getFullYear() - buyYear;
+  let monthsDiff = now.getMonth() - buyMonth;
+  
+  if (monthsDiff < 0) {
+    yearsDiff--;
+    monthsDiff += 12;
+  }
+  
+  // Day of month correction
+  if (now.getDate() < buyDay) {
+    monthsDiff--;
+    if (monthsDiff < 0) {
+      yearsDiff--;
+      monthsDiff += 12;
+    }
+  }
+  
+  const totalMonths = (yearsDiff * 12) + monthsDiff;
+  if (totalMonths < 12) {
+    const finalMonths = Math.max(1, totalMonths);
+    return `${finalMonths} month${finalMonths !== 1 ? 's' : ''}`;
+  } else {
+    const yLabel = `${yearsDiff} year${yearsDiff !== 1 ? 's' : ''}`;
+    const mLabel = monthsDiff > 0 ? ` ${monthsDiff} month${monthsDiff !== 1 ? 's' : ''}` : '';
+    return `${yLabel}${mLabel}`;
+  }
 };

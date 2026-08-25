@@ -10,6 +10,8 @@ import {
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
 import { getAssetTypeBadgeStyle, getBrokerBadgeStyle } from '../utils/badgeStyles';
+import { isCommodityCategory } from '../services/portfolioCalculationService';
+import { getInvestmentAge } from '../utils/calculations';
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
   'Stocks': 'Stock',
@@ -39,14 +41,41 @@ export const Dashboard: React.FC = () => {
   // Invoke shared calculation hook
   const { holdings } = usePortfolio();
 
-  // Calculate basic details: Total Invested Amount and Number of Investments
-  const totalInvested = holdings.reduce((sum, h) => sum + (h.investedAmount ?? 0), 0);
+  // Calculate basic details: Number of Investments
   const numberOfInvestments = holdings.length;
+
+  // Group holdings by platform/broker using correct investedAmount value
+  const platformInvestedMap = holdings.reduce((acc, h) => {
+    let resolvedPlatform = '';
+    if (h.broker === 'Other') {
+      resolvedPlatform = h.customBroker?.trim() || '';
+    } else {
+      resolvedPlatform = h.broker?.trim() || '';
+    }
+    if (!resolvedPlatform) {
+      resolvedPlatform = 'Other';
+    }
+    acc[resolvedPlatform] = (acc[resolvedPlatform] || 0) + (h.investedAmount ?? 0);
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Convert to sorted array of platforms with positive invested capital
+  const platformInvestedData = Object.entries(platformInvestedMap)
+    .map(([platform, amount]) => ({
+      platform,
+      amount
+    }))
+    .filter(item => item.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
 
   // Filter and sort for Recent Investments (top 5 sorted by buy date / purchase date)
   const recentInvestments = [...holdings]
     .sort((a, b) => new Date(b.buyDate || b.purchaseDate || 0).getTime() - new Date(a.buyDate || a.purchaseDate || 0).getTime())
     .slice(0, 5);
+
+  // Sort investments from oldest (earliest date) to newest (latest date)
+  const sortedByAge = [...holdings]
+    .sort((a, b) => new Date(a.buyDate || a.purchaseDate || 0).getTime() - new Date(b.buyDate || b.purchaseDate || 0).getTime());
 
   // Filter money tracker records to show real data only
   const filteredMoneyRecords = moneyRecords.filter(r => !r.isDemo);
@@ -92,27 +121,38 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Invested */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
-          <div className="flex items-center justify-between text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-2">
-            <span>💰 Total Invested</span>
-            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
-              <Briefcase className="h-4.5 w-4.5 text-slate-400 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        {/* Total Amount Invested per App/Platform */}
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default animate-fade-in col-span-1 sm:col-span-2 lg:col-span-2">
+          <div className="w-full">
+            <div className="flex items-center justify-between text-slate-405 dark:text-slate-550 text-[10px] font-bold uppercase tracking-wider mb-2">
+              <span>TOTAL AMOUNT INVESTED PER APP/PLATFORM</span>
+              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors flex-shrink-0">
+                <Briefcase className="h-4 w-4 text-slate-405 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-none tracking-tight">
-              {formatCurrency(totalInvested)}
+            <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-none tracking-tight mb-4">
+              {formatCurrency(platformInvestedData.reduce((sum, item) => sum + item.amount, 0))}
             </div>
-            <div className="text-xs text-slate-405 dark:text-slate-550 mt-3 font-medium">
-              Total capital invested
+            <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1">
+              {platformInvestedData.length === 0 ? (
+                <div className="text-slate-405 dark:text-slate-550 italic text-xs font-semibold py-1">
+                  No investments found
+                </div>
+              ) : (
+                platformInvestedData.map(item => (
+                  <div key={item.platform} className="flex justify-between items-center text-xs font-bold py-1 border-b border-slate-100 dark:border-slate-850 last:border-0 last:pb-0">
+                    <span className="text-slate-500 dark:text-slate-400 font-semibold truncate max-w-[140px]">{item.platform}</span>
+                    <span className="text-indigo-650 dark:text-indigo-400 font-extrabold">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
 
         {/* Active Investments */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default col-span-1">
           <div className="flex items-center justify-between text-slate-405 dark:text-slate-555 text-[10px] font-bold uppercase tracking-wider mb-2">
             <span>📦 Active Investments</span>
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
@@ -130,7 +170,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Money to Receive */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default col-span-1">
           <div className="flex items-center justify-between text-slate-405 dark:text-slate-555 text-[10px] font-bold uppercase tracking-wider mb-2">
             <span>💰 Money to Receive</span>
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
@@ -148,7 +188,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Money to Give */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default col-span-1 sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between text-slate-405 dark:text-slate-555 text-[10px] font-bold uppercase tracking-wider mb-2">
             <span>💸 Money to Give</span>
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
@@ -247,7 +287,7 @@ export const Dashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right text-slate-700 dark:text-slate-350 whitespace-nowrap font-bold">
-                          {inv.quantity}
+                          {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} g` : inv.quantity}
                         </td>
                         <td className="px-4 py-3.5 text-right font-extrabold text-indigo-650 dark:text-indigo-400 whitespace-nowrap">
                           {formatCurrency(inv.investedAmount)}
@@ -289,12 +329,118 @@ export const Dashboard: React.FC = () => {
                         <span className="font-bold text-slate-850 dark:text-slate-200">{broker}</span>
                       </div>
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Quantity</span>
-                        <span className="font-bold text-slate-850 dark:text-slate-200">{inv.quantity}</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">
+                          {isCommodityCategory(inv.category || inv.assetType) ? 'Weight' : 'Quantity'}
+                        </span>
+                        <span className="font-bold text-slate-850 dark:text-slate-200">
+                          {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} g` : inv.quantity}
+                        </span>
                       </div>
                       <div>
                         <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Invested</span>
                         <span className="font-extrabold text-indigo-650 dark:text-indigo-400">{formatCurrency(inv.investedAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Age of Investments Section */}
+      <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-855 pb-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white m-0">
+              ⏳ AGE OF INVESTMENTS
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5 mb-0 font-medium">
+              How long you have held each investment, sorted from oldest to newest.
+            </p>
+          </div>
+        </div>
+
+        {sortedByAge.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <span className="text-3xl mb-3">⏳</span>
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">No investments yet</h4>
+            <p className="text-xs text-slate-405 dark:text-slate-550 max-w-xs font-medium">
+              Add investments to track how long you have held them.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto w-full">
+              <table className="w-full border-collapse text-left text-xs font-semibold">
+                <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-550 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
+                  <tr>
+                    <th className="px-4 py-3">Investment Name</th>
+                    <th className="px-4 py-3">Platform/App</th>
+                    <th className="px-4 py-3">Investment Date</th>
+                    <th className="px-4 py-3 text-right">Age</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
+                  {sortedByAge.map(inv => {
+                    const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other');
+                    const invDate = inv.buyDate || inv.purchaseDate || '—';
+                    const age = getInvestmentAge(inv.buyDate || inv.purchaseDate);
+                    return (
+                      <tr
+                        key={inv.id}
+                        className="hover:bg-slate-55/50 dark:hover:bg-slate-800/15 transition-colors animate-fade-in"
+                      >
+                        <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                          {inv.assetName}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getBrokerBadgeStyle(broker)}`}>
+                            {broker}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {invDate}
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-extrabold text-indigo-650 dark:text-indigo-400 whitespace-nowrap">
+                          {age}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="md:hidden space-y-4">
+              {sortedByAge.map(inv => {
+                const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other');
+                const invDate = inv.buyDate || inv.purchaseDate || '—';
+                const age = getInvestmentAge(inv.buyDate || inv.purchaseDate);
+                return (
+                  <div
+                    key={inv.id}
+                    className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 space-y-2.5 font-semibold text-[11px]"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0">
+                          {inv.assetName}
+                        </h4>
+                      </div>
+                      <span className="font-extrabold text-indigo-650 dark:text-indigo-400 whitespace-nowrap">{age}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-105 dark:border-slate-800 text-[10px]">
+                      <div>
+                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Platform</span>
+                        <span className="font-bold text-slate-850 dark:text-slate-200">{broker}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Inv. Date</span>
+                        <span className="font-bold text-slate-850 dark:text-slate-200">{invDate}</span>
                       </div>
                     </div>
                   </div>

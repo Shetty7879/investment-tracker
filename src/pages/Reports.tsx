@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import { getMutualFundTransactionMetrics } from '../utils/calculations';
+import { isCommodityCategory } from '../services/portfolioCalculationService';
 import {
   ResponsiveContainer,
   PieChart,
@@ -533,11 +534,20 @@ export const Reports: React.FC = () => {
                             {tx.type}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{tx.quantity}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatCurrency(tx.price)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {parent && isCommodityCategory(parent.category || parent.assetType) ? `${tx.quantity} g` : tx.quantity}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {parent && isCommodityCategory(parent.category || parent.assetType) ? `${formatCurrency(tx.price)}/g` : formatCurrency(tx.price)}
+                        </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatCurrency(tx.charges || 0)}</td>
                         <td className="px-6 py-3 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap font-extrabold">
-                          {formatCurrency(parent ? (getMutualFundTransactionMetrics(tx, parent).amount) : (tx.quantity * tx.price))}
+                          {formatCurrency(parent
+                            ? isCommodityCategory(parent.category || parent.assetType)
+                              ? (tx.amount ?? parent.investedAmount ?? 0)
+                              : getMutualFundTransactionMetrics(tx, parent).amount
+                            : (tx.amount ?? (tx.quantity * tx.price))
+                          )}
                         </td>
                       </tr>
                     );

@@ -11,6 +11,7 @@ import type { HoldingMetrics } from './portfolioCalculationService';
 import type { Investment, Transaction, Goal } from '../types';
 import type { MarketPriceData } from './marketDataService';
 import { resolveMarketSymbol } from './marketSymbolService';
+import { getInvestmentAge } from '../utils/calculations';
 
 describe('Portfolio Calculation Service Unit Tests', () => {
 
@@ -1118,5 +1119,81 @@ describe('Portfolio Calculation Service Unit Tests', () => {
     const metricsAfterFailure = calculateHoldingMetrics(stockGMR, [], activeCacheAfterFailure);
     expect(metricsAfterFailure.currentPrice).toBe(82.10);
     expect(metricsAfterFailure.priceStatus).toBe('cached');
+  });
+
+  test('Digital Gold, Silver, Platinum weight-based calculations and no-auto-calculations', () => {
+    const goldInv: Investment = {
+      id: 'gold-1',
+      assetName: 'Digital Gold test',
+      category: 'Digital Gold',
+      assetType: 'Digital Gold',
+      quantity: 10,
+      buyPrice: 7000,
+      investedAmount: 65000,
+      currentValue: 72000,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+
+    const metrics = calculateHoldingMetrics(goldInv, [], {});
+
+    // Weight and buy price resolved correctly:
+    expect(metrics.quantity).toBe(10);
+    expect(metrics.buyPrice).toBe(7000);
+    
+    // No auto-calculations! Stored investedAmount and currentValue preserved exactly:
+    expect(metrics.investedAmount).toBe(65000);
+    expect(metrics.currentValue).toBe(72000);
+    
+    // Profit loss and returns should be undefined (no derived math):
+    expect(metrics.profitLoss).toBeUndefined();
+    expect(metrics.returnPercent).toBeUndefined();
+    expect(metrics.realizedPL).toBe(0);
+    expect(metrics.totalPL).toBe(0);
+  });
+
+  test('getInvestmentAge calculates correct dynamic human-readable age', () => {
+    const getLocalYYYYMMDD = (d: Date): string => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const todayStr = getLocalYYYYMMDD(new Date());
+    
+    // Less than 1 day -> Today
+    expect(getInvestmentAge(todayStr)).toBe('Today');
+    
+    // Future date -> 0 days
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = getLocalYYYYMMDD(tomorrow);
+    expect(getInvestmentAge(tomorrowStr)).toBe('0 days');
+    
+    // Less than 30 days -> X days
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    const tenDaysAgoStr = getLocalYYYYMMDD(tenDaysAgo);
+    expect(getInvestmentAge(tenDaysAgoStr)).toBe('10 days');
+    
+    // Less than 12 months -> X months
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const threeMonthsAgoStr = getLocalYYYYMMDD(threeMonthsAgo);
+    const age3m = getInvestmentAge(threeMonthsAgoStr);
+    expect(age3m).toMatch(/(3|2) month/);
+    
+    // 12 months or more -> X years X months
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+    const twoYearsAgoStr = getLocalYYYYMMDD(twoYearsAgo);
+    const age2y = getInvestmentAge(twoYearsAgoStr);
+    expect(age2y).toMatch(/2 year/);
   });
 });

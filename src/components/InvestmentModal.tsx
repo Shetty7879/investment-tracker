@@ -90,6 +90,11 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const [mfNav, setMfNav] = useState('');
   const [mfUnits, setMfUnits] = useState('');
 
+  // ── Commodity-specific fields ──────────────────────────────────────
+  const [currentPricePerGram, setCurrentPricePerGram] = useState('');
+  const [manuallyEnteredInvestedAmount, setManuallyEnteredInvestedAmount] = useState('');
+  const [manuallyEnteredCurrentValue, setManuallyEnteredCurrentValue] = useState('');
+
   const handleMfAmountChange = (val: string) => {
     setMfInvestmentAmount(val);
     const amt = parseFloat(val);
@@ -244,10 +249,23 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           setMfUnits(qtyVal ? qtyVal.toString() : '');
           setMfNav(priceVal ? priceVal.toString() : '');
           setMfInvestmentAmount(amtVal ? amtVal.toFixed(2) : '');
+          setCurrentPricePerGram('');
+          setManuallyEnteredInvestedAmount('');
+          setManuallyEnteredCurrentValue('');
+        } else if (resolvedType === 'Digital Gold' || resolvedType === 'Digital Silver' || resolvedType === 'Digital Platinum') {
+          setMfUnits('');
+          setMfNav('');
+          setMfInvestmentAmount('');
+          setCurrentPricePerGram(investmentToEdit.currentPricePerGram ? investmentToEdit.currentPricePerGram.toString() : (investmentToEdit.currentPrice ? investmentToEdit.currentPrice.toString() : ''));
+          setManuallyEnteredInvestedAmount(investmentToEdit.investedAmount ? investmentToEdit.investedAmount.toString() : '');
+          setManuallyEnteredCurrentValue(investmentToEdit.currentValue ? investmentToEdit.currentValue.toString() : '');
         } else {
           setMfUnits('');
           setMfNav('');
           setMfInvestmentAmount('');
+          setCurrentPricePerGram('');
+          setManuallyEnteredInvestedAmount('');
+          setManuallyEnteredCurrentValue('');
         }
 
         // Clear IPO fields
@@ -285,6 +303,9 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       setMfUnits('');
       setMfNav('');
       setMfInvestmentAmount('');
+      setCurrentPricePerGram('');
+      setManuallyEnteredInvestedAmount('');
+      setManuallyEnteredCurrentValue('');
     }
   }, [isOpen, investmentToEdit]);
 
@@ -389,10 +410,33 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       }
       if (!applicationDate) errs.applicationDate = 'Application Date is required.';
     } else {
-      if (!quantity || isNaN(qtyNum) || qtyNum <= 0)
-        errs.quantity = 'Quantity / Units must be greater than 0.';
-      if (!buyPrice || isNaN(priceNum) || priceNum <= 0)
-        errs.buyPrice = 'Buy Price / Price per Unit must be greater than 0.';
+      const isCommodityType = type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum';
+      if (isCommodityType) {
+        if (!quantity || isNaN(qtyNum) || qtyNum <= 0)
+          errs.quantity = 'Weight (grams) must be greater than 0.';
+        if (!buyPrice || isNaN(priceNum) || priceNum <= 0)
+          errs.buyPrice = 'Buy Price per Gram must be greater than 0.';
+        
+        const curPricePGNum = parseFloat(currentPricePerGram);
+        if (currentPricePerGram && (isNaN(curPricePGNum) || curPricePGNum <= 0)) {
+          errs.currentPricePerGram = 'Current Price per Gram must be greater than 0.';
+        }
+        
+        const manualInvestedNum = parseFloat(manuallyEnteredInvestedAmount);
+        if (manuallyEnteredInvestedAmount && (isNaN(manualInvestedNum) || manualInvestedNum <= 0)) {
+          errs.manuallyEnteredInvestedAmount = 'Total Invested Amount must be greater than 0.';
+        }
+
+        const manualCurrentValNum = parseFloat(manuallyEnteredCurrentValue);
+        if (manuallyEnteredCurrentValue && (isNaN(manualCurrentValNum) || manualCurrentValNum <= 0)) {
+          errs.manuallyEnteredCurrentValue = 'Current Value must be greater than 0.';
+        }
+      } else {
+        if (!quantity || isNaN(qtyNum) || qtyNum <= 0)
+          errs.quantity = 'Quantity / Units must be greater than 0.';
+        if (!buyPrice || isNaN(priceNum) || priceNum <= 0)
+          errs.buyPrice = 'Buy Price / Price per Unit must be greater than 0.';
+      }
       if (!buyDate) errs.buyDate = 'Buy Date is required.';
     }
 
@@ -459,6 +503,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       } as Omit<Investment, 'id'>;
     } else {
       const isMF = type === 'Mutual Fund';
+      const isCommodity = type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum';
       payload = {
         assetName: name.trim(),
         category,
@@ -474,7 +519,15 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         isDemo: false,
         customAssetType: type === 'Other' ? customType.trim() : undefined,
         customBroker: broker === 'Other' ? customBroker.trim() : undefined,
-        ...(isMF ? { units: qtyNum, nav: priceNum, investedAmount: standardInvestedAmount } : {})
+        ...(isMF ? { units: qtyNum, nav: priceNum, investedAmount: standardInvestedAmount } : {}),
+        ...(isCommodity ? {
+          weightGrams: qtyNum,
+          buyPricePerGram: priceNum,
+          currentPricePerGram: currentPricePerGram ? parseFloat(currentPricePerGram) : undefined,
+          currentPrice: currentPricePerGram ? parseFloat(currentPricePerGram) : undefined,
+          investedAmount: manuallyEnteredInvestedAmount ? parseFloat(manuallyEnteredInvestedAmount) : undefined,
+          currentValue: manuallyEnteredCurrentValue ? parseFloat(manuallyEnteredCurrentValue) : undefined,
+        } : {})
       } as Omit<Investment, 'id'>;
     }
 
@@ -858,55 +911,146 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     </p>
                   )}
                 </div>
+              ) : type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum' ? (
+                // Commodity fields
+                <div className="space-y-5">
+                  {/* Row 1: Weight & Buy Price per Gram */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                        Weight (grams) *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        placeholder="e.g. 10"
+                        className={inputClass(errors.quantity)}
+                      />
+                      {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                        Buy Price per Gram (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={buyPrice}
+                        onChange={(e) => setBuyPrice(e.target.value)}
+                        placeholder="e.g. 7000"
+                        className={inputClass(errors.buyPrice)}
+                      />
+                      {errors.buyPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.buyPrice}</p>}
+                    </div>
+                  </div>
+
+                  {/* Row 2: Current Price per Gram */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      Current Price per Gram (₹) (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={currentPricePerGram}
+                      onChange={(e) => setCurrentPricePerGram(e.target.value)}
+                      placeholder="e.g. 7500"
+                      className={inputClass(errors.currentPricePerGram)}
+                    />
+                    {errors.currentPricePerGram && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.currentPricePerGram}</p>}
+                  </div>
+
+                  {/* Row 3: Total Invested & Current Value */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Total Invested Amount (₹) (Optional)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={manuallyEnteredInvestedAmount}
+                        onChange={(e) => setManuallyEnteredInvestedAmount(e.target.value)}
+                        placeholder="e.g. 70000"
+                        className={inputClass(errors.manuallyEnteredInvestedAmount)}
+                      />
+                      {errors.manuallyEnteredInvestedAmount && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.manuallyEnteredInvestedAmount}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
+                        Current Value (₹) (Optional)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={manuallyEnteredCurrentValue}
+                        onChange={(e) => setManuallyEnteredCurrentValue(e.target.value)}
+                        placeholder="e.g. 75000"
+                        className={inputClass(errors.manuallyEnteredCurrentValue)}
+                      />
+                      {errors.manuallyEnteredCurrentValue && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.manuallyEnteredCurrentValue}</p>}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-500/5 border border-slate-500/10 px-4 py-3 text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                    ℹ️ For weight-based commodities, values are not automatically computed. Enter the exact values you wish to store.
+                  </div>
+                </div>
               ) : (
                 // Standard fields
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                      Quantity / Units *
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      placeholder="0"
-                      className={inputClass(errors.quantity)}
-                    />
-                    {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Quantity / Units *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        placeholder="0"
+                        className={inputClass(errors.quantity)}
+                      />
+                      {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Buy Price / Price per Unit *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={buyPrice}
+                        onChange={(e) => setBuyPrice(e.target.value)}
+                        placeholder="0.00"
+                        className={inputClass(errors.buyPrice)}
+                      />
+                      {errors.buyPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.buyPrice}</p>}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                      Buy Price / Price per Unit *
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={buyPrice}
-                      onChange={(e) => setBuyPrice(e.target.value)}
-                      placeholder="0.00"
-                      className={inputClass(errors.buyPrice)}
-                    />
-                    {errors.buyPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.buyPrice}</p>}
+                  {/* Invested Amount Card */}
+                  <div className="bg-indigo-500/[0.02] dark:bg-indigo-500/[0.04] border border-indigo-500/10 rounded-2xl p-4 flex justify-between items-center text-xs font-bold shadow-sm">
+                    <div>
+                      <span className="text-slate-400 dark:text-slate-555 block text-[9px] uppercase tracking-wider mb-0.5">Calculated Principal</span>
+                      {type === 'Mutual Fund' ? (
+                        <span className="text-slate-400 font-medium">{mfUnits || '0'} units × ₹{mfNav || '0.00'} NAV</span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">{quantity || '0'} × {buyPrice || '0.00'}</span>
+                      )}
+                    </div>
+                    <span className="text-lg font-extrabold text-indigo-600 dark:text-indigo-400">
+                      {formatCurrency(standardInvestedAmount)}
+                    </span>
                   </div>
-                </div>
+                </>
               )}
-
-              {/* Invested Amount Card */}
-              <div className="bg-indigo-500/[0.02] dark:bg-indigo-500/[0.04] border border-indigo-500/10 rounded-2xl p-4 flex justify-between items-center text-xs font-bold shadow-sm">
-                <div>
-                  <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase tracking-wider mb-0.5">Calculated Principal</span>
-                  {type === 'Mutual Fund' ? (
-                    <span className="text-slate-400 font-medium">{mfUnits || '0'} units × ₹{mfNav || '0.00'} NAV</span>
-                  ) : (
-                    <span className="text-slate-400 font-medium">{quantity || '0'} × {buyPrice || '0.00'}</span>
-                  )}
-                </div>
-                <span className="text-lg font-extrabold text-indigo-600 dark:text-indigo-400">
-                  {formatCurrency(standardInvestedAmount)}
-                </span>
-              </div>
             </>
           )}
 

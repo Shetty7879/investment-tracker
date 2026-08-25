@@ -40,6 +40,16 @@ export interface GoalMetrics {
 }
 
 /**
+ * Helper to identify if a category represents a commodity.
+ */
+export const isCommodityCategory = (cat?: string): boolean => {
+  if (!cat) return false;
+  const clean = cat.trim().toLowerCase();
+  return clean === 'gold' || clean === 'silver' || clean === 'platinum' ||
+         clean === 'digital gold' || clean === 'digital silver' || clean === 'digital platinum';
+};
+
+/**
  * Rounds value to 2 decimal places safely, preventing negative zero and handling NaN/Infinity.
  */
 export const safeRound = (value: number | undefined | null): number => {
@@ -122,7 +132,7 @@ export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[])
     const mf = getMutualFundMetrics(inv);
     qty = mf.units;
     price = mf.nav;
-  } else if (category === 'Gold' || category === 'Silver' || category === 'Platinum') {
+  } else if (isCommodityCategory(category)) {
     qty = inv.weightGrams ?? inv.quantity ?? 1;
     price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
   } else if (category === 'Fixed Deposits' || category === 'Savings/Cash') {
@@ -140,7 +150,11 @@ export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[])
       type: 'BUY',
       quantity: qty,
       price: price,
-      amount: category === 'Mutual Funds' ? getMutualFundMetrics(inv).investedAmount : (qty * price),
+      amount: category === 'Mutual Funds'
+        ? getMutualFundMetrics(inv).investedAmount
+        : isCommodityCategory(category)
+          ? (inv.investedAmount ?? 0)
+          : (qty * price),
       charges: inv.charges ?? 0,
       date: inv.buyDate || inv.purchaseDate || '2026-01-01',
       isDemo: !!inv.isDemo,
@@ -157,8 +171,29 @@ export const calculateHoldingMetrics = (
   allTxs: Transaction[],
   marketPrices: Record<string, MarketPriceData>
 ): HoldingMetrics => {
-  const txList = getEffectiveTransactions(inv, allTxs);
   const category = inv.category || inv.assetType || 'Stocks';
+
+  if (isCommodityCategory(category)) {
+    const hasInvested = inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0;
+    const hasCurrent = inv.currentValue !== undefined && inv.currentValue !== null && inv.currentValue > 0;
+    return {
+      ...inv,
+      quantity: inv.weightGrams ?? inv.quantity ?? 0,
+      buyPrice: inv.buyPricePerGram ?? inv.buyPrice ?? 0,
+      currentPrice: inv.currentPricePerGram ?? inv.currentPrice ?? null,
+      investedAmount: inv.investedAmount ?? 0,
+      currentValue: inv.currentValue ?? undefined,
+      profitLoss: undefined,
+      returnPercent: undefined,
+      realizedPL: 0,
+      totalPL: 0,
+      priceStatus: 'cached',
+      priceSource: 'Manual Entry',
+      isValuationUnavailable: !hasInvested && !hasCurrent
+    };
+  }
+
+  const txList = getEffectiveTransactions(inv, allTxs);
 
   let currentQuantity = 0;
   let averageBuyPrice = 0;
