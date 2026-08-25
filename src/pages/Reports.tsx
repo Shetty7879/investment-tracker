@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
+import { getMutualFundTransactionMetrics } from '../utils/calculations';
 import {
   ResponsiveContainer,
   PieChart,
@@ -119,13 +120,15 @@ export const Reports: React.FC = () => {
       if (!isAllotted) return;
     }
 
+    const metrics = parent ? getMutualFundTransactionMetrics(tx, parent) : { quantity: tx.quantity, price: tx.price, amount: tx.quantity * tx.price };
+
     const mLabel = `${monthNames[pDate.getMonth()]} ${pDate.getFullYear().toString().slice(-2)}`;
     const sortKey = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
 
     if (!monthlySumMap[sortKey]) {
       monthlySumMap[sortKey] = { label: mLabel, amount: 0, sortKey };
     }
-    monthlySumMap[sortKey].amount += (tx.quantity * tx.price + tx.charges);
+    monthlySumMap[sortKey].amount += (metrics.amount + tx.charges);
   });
 
   const barChartData = Object.values(monthlySumMap)
@@ -172,14 +175,16 @@ export const Reports: React.FC = () => {
       if (!isAllotted) return;
     }
 
+    const metrics = parent ? getMutualFundTransactionMetrics(tx, parent) : { quantity: tx.quantity, price: tx.price, amount: tx.quantity * tx.price };
+
     if (tx.type === 'BUY') {
-      const cost = tx.quantity * tx.price + tx.charges;
+      const cost = metrics.amount + tx.charges;
       dateTotalsMap[dateKey].investedDelta += cost;
       dateTotalsMap[dateKey].currentDelta += cost;
     } else if (tx.type === 'SELL') {
-      const soldCost = tx.quantity * (parent?.buyPrice || tx.price);
+      const soldCost = tx.quantity * (parent?.buyPrice || metrics.price);
       dateTotalsMap[dateKey].investedDelta -= soldCost;
-      dateTotalsMap[dateKey].currentDelta -= (tx.quantity * tx.price);
+      dateTotalsMap[dateKey].currentDelta -= metrics.amount;
     }
   });
 
@@ -337,7 +342,7 @@ export const Reports: React.FC = () => {
 
       {/* Overall Performance Widgets */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
+
         {/* Core metrics summary */}
         <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between md:col-span-2">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Portfolio Valuation Summary</h3>
@@ -429,7 +434,7 @@ export const Reports: React.FC = () => {
 
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* Donut asset class allocation */}
         <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
@@ -507,7 +512,7 @@ export const Reports: React.FC = () => {
 
       {/* Cumulative Performance Line Chart & Profit/Loss chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* Cumulative performance over time */}
         <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
@@ -602,7 +607,7 @@ export const Reports: React.FC = () => {
                     const parent = holdings.find(h => h.id === tx.investmentId);
                     const title = parent ? parent.assetName : 'Holding Account';
                     const category = parent ? (parent.category || parent.assetType) : 'N/A';
-                    
+
                     return (
                       <tr key={tx.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
                         <td className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">{tx.date}</td>
@@ -619,7 +624,7 @@ export const Reports: React.FC = () => {
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatCurrency(tx.price)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatCurrency(tx.charges || 0)}</td>
                         <td className="px-6 py-3 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap font-extrabold">
-                          {formatCurrency(tx.quantity * tx.price)}
+                          {formatCurrency(parent ? (getMutualFundTransactionMetrics(tx, parent).amount) : (tx.quantity * tx.price))}
                         </td>
                       </tr>
                     );

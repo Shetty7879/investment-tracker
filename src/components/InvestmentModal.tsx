@@ -85,8 +85,70 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const [buyDate, setBuyDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
+  // ── Mutual Fund-specific fields ───────────────────────────────────
+  const [mfInvestmentAmount, setMfInvestmentAmount] = useState('');
+  const [mfNav, setMfNav] = useState('');
+  const [mfUnits, setMfUnits] = useState('');
+
+  const handleMfAmountChange = (val: string) => {
+    setMfInvestmentAmount(val);
+    const amt = parseFloat(val);
+    const nav = parseFloat(mfNav);
+    if (!isNaN(amt) && !isNaN(nav) && nav > 0) {
+      const computedUnits = amt / nav;
+      const unitsStr = computedUnits.toFixed(4);
+      setMfUnits(unitsStr);
+      setQuantity(unitsStr);
+    } else {
+      setMfUnits('');
+      setQuantity('');
+    }
+  };
+
+  const handleMfNavChange = (val: string) => {
+    setMfNav(val);
+    setBuyPrice(val);
+    const nav = parseFloat(val);
+
+    // Check if we have amount, if so update units
+    if (mfInvestmentAmount && !isNaN(nav) && nav > 0) {
+      const amt = parseFloat(mfInvestmentAmount);
+      if (!isNaN(amt)) {
+        const computedUnits = amt / nav;
+        const unitsStr = computedUnits.toFixed(4);
+        setMfUnits(unitsStr);
+        setQuantity(unitsStr);
+        return;
+      }
+    }
+
+    // Check if we have units, if so update amount
+    if (mfUnits && !isNaN(nav)) {
+      const units = parseFloat(mfUnits);
+      if (!isNaN(units)) {
+        const computedAmt = units * nav;
+        setMfInvestmentAmount(computedAmt.toFixed(2));
+      }
+    }
+  };
+
+  const handleMfUnitsChange = (val: string) => {
+    setMfUnits(val);
+    setQuantity(val);
+    const units = parseFloat(val);
+    const nav = parseFloat(mfNav);
+    if (!isNaN(units) && !isNaN(nav)) {
+      const computedAmt = units * nav;
+      setMfInvestmentAmount(computedAmt.toFixed(2));
+    } else {
+      setMfInvestmentAmount('');
+    }
+  };
+
   // ── IPO-specific fields ────────────────────────────────────────────
-  const [issuePrice, setIssuePrice] = useState('');
+  const [priceLow, setPriceLow] = useState('');
+  const [priceHigh, setPriceHigh] = useState('');
+  const [finalAllotmentPrice, setFinalAllotmentPrice] = useState('');
   const [appliedLots, setAppliedLots] = useState('');
   const [sharesPerLot, setSharesPerLot] = useState('');
   const [allottedLots, setAllottedLots] = useState('');
@@ -123,9 +185,16 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
       if (resolvedType === 'IPO') {
         // Restore IPO-specific fields with fallbacks for legacy records
-        setIssuePrice(
-          (investmentToEdit.issuePrice ?? investmentToEdit.ipoAllotmentPrice ?? investmentToEdit.buyPrice ?? '').toString()
+        const legacyPrice = (investmentToEdit.issuePrice ?? investmentToEdit.ipoAllotmentPrice ?? investmentToEdit.buyPrice ?? '').toString();
+        const storedPriceLow = (investmentToEdit.priceLow ?? '').toString();
+        const storedPriceHigh = (investmentToEdit.priceHigh ?? '').toString();
+
+        setPriceLow(storedPriceLow || legacyPrice);
+        setPriceHigh(storedPriceHigh || legacyPrice);
+        setFinalAllotmentPrice(
+          (investmentToEdit.ipoAllotmentPrice ?? investmentToEdit.issuePrice ?? investmentToEdit.buyPrice ?? '').toString()
         );
+
         setAppliedLots(
           (investmentToEdit.appliedLots ?? investmentToEdit.ipoLotsApplied ?? '').toString()
         );
@@ -161,13 +230,30 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         setBuyPrice('');
         setBuyDate(new Date().toISOString().split('T')[0]);
       } else {
-        setQuantity(investmentToEdit.quantity?.toString() || '');
-        setBuyPrice(investmentToEdit.buyPrice?.toString() || '');
+        const qtyVal = investmentToEdit.quantity ?? investmentToEdit.units ?? 0;
+        const priceVal = investmentToEdit.buyPrice ?? investmentToEdit.nav ?? 0;
+
+        setQuantity(qtyVal ? qtyVal.toString() : '');
+        setBuyPrice(priceVal ? priceVal.toString() : '');
         setBuyDate(
           investmentToEdit.buyDate || investmentToEdit.purchaseDate || new Date().toISOString().split('T')[0]
         );
+
+        if (resolvedType === 'Mutual Fund') {
+          const amtVal = qtyVal * priceVal;
+          setMfUnits(qtyVal ? qtyVal.toString() : '');
+          setMfNav(priceVal ? priceVal.toString() : '');
+          setMfInvestmentAmount(amtVal ? amtVal.toFixed(2) : '');
+        } else {
+          setMfUnits('');
+          setMfNav('');
+          setMfInvestmentAmount('');
+        }
+
         // Clear IPO fields
-        setIssuePrice('');
+        setPriceLow('');
+        setPriceHigh('');
+        setFinalAllotmentPrice('');
         setAppliedLots('');
         setSharesPerLot('');
         setAllottedLots('');
@@ -186,20 +272,28 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       setBuyPrice('');
       setBuyDate(new Date().toISOString().split('T')[0]);
       setNotes('');
-      setIssuePrice('');
+      setPriceLow('');
+      setPriceHigh('');
+      setFinalAllotmentPrice('');
       setAppliedLots('');
       setSharesPerLot('');
       setAllottedLots('');
       setAllotmentStatus('Applied');
       setApplicationDate(new Date().toISOString().split('T')[0]);
       setListingDate('');
+
+      setMfUnits('');
+      setMfNav('');
+      setMfInvestmentAmount('');
     }
   }, [isOpen, investmentToEdit]);
 
   if (!isOpen) return null;
 
   // ── Computed values ────────────────────────────────────────────────
-  const issuePriceNum = parseFloat(issuePrice);
+  const priceLowNum = parseFloat(priceLow);
+  const priceHighNum = parseFloat(priceHigh);
+  const finalPriceNum = parseFloat(finalAllotmentPrice);
   const appliedLotsNum = parseFloat(appliedLots);
   const sharesPerLotNum = parseFloat(sharesPerLot);
   const allottedLotsNum = parseFloat(allottedLots);
@@ -209,16 +303,16 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     allotmentStatus === 'Allotted' &&
     !isNaN(allottedLotsNum) && allottedLotsNum > 0 &&
     !isNaN(sharesPerLotNum) && sharesPerLotNum > 0 &&
-    !isNaN(issuePriceNum) && issuePriceNum > 0
-      ? allottedLotsNum * sharesPerLotNum * issuePriceNum
+    !isNaN(finalPriceNum) && finalPriceNum > 0
+      ? allottedLotsNum * sharesPerLotNum * finalPriceNum
       : 0;
 
-  // Applied amount (for display only)
+  // Applied amount (for display only) using the upper price (priceHigh)
   const ipoAppliedAmount =
     !isNaN(appliedLotsNum) && appliedLotsNum > 0 &&
     !isNaN(sharesPerLotNum) && sharesPerLotNum > 0 &&
-    !isNaN(issuePriceNum) && issuePriceNum > 0
-      ? appliedLotsNum * sharesPerLotNum * issuePriceNum
+    !isNaN(priceHighNum) && priceHighNum > 0
+      ? appliedLotsNum * sharesPerLotNum * priceHighNum
       : 0;
 
   // Standard qty * price
@@ -233,6 +327,12 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const handleTypeChange = (val: string) => {
     setType(val);
     if (val !== 'Other') setCustomType('');
+
+    setMfInvestmentAmount('');
+    setMfNav('');
+    setMfUnits('');
+    setQuantity('');
+    setBuyPrice('');
   };
 
   const handleBrokerChange = (val: BrokerType) => {
@@ -268,8 +368,12 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     if (broker === 'Other' && !customBroker.trim()) errs.customBroker = 'Please specify the platform.';
 
     if (isIPO) {
-      if (!issuePrice || isNaN(issuePriceNum) || issuePriceNum <= 0)
-        errs.issuePrice = 'IPO Price per Share must be greater than 0.';
+      if (!priceLow || isNaN(priceLowNum) || priceLowNum <= 0)
+        errs.priceLow = 'Lower Price must be greater than 0.';
+      if (!priceHigh || isNaN(priceHighNum) || priceHighNum <= 0)
+        errs.priceHigh = 'Upper Price must be greater than 0.';
+      if (priceLow && priceHigh && priceLowNum > priceHighNum)
+        errs.priceHigh = 'Upper Price cannot be less than Lower Price.';
       if (!appliedLots || isNaN(appliedLotsNum) || appliedLotsNum <= 0)
         errs.appliedLots = 'Applied Lots must be greater than 0.';
       if (!sharesPerLot || isNaN(sharesPerLotNum) || sharesPerLotNum <= 0)
@@ -279,6 +383,9 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           errs.allottedLots = 'Allotted Lots must be 0 or more.';
         else if (!isNaN(appliedLotsNum) && allottedLotsNum > appliedLotsNum)
           errs.allottedLots = 'Allotted Lots cannot exceed Applied Lots.';
+
+        if (!finalAllotmentPrice || isNaN(finalPriceNum) || finalPriceNum <= 0)
+          errs.finalAllotmentPrice = 'Final / Allotted Price must be greater than 0.';
       }
       if (!applicationDate) errs.applicationDate = 'Application Date is required.';
     } else {
@@ -309,6 +416,8 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         allotmentStatus === 'Allotted' && !isNaN(allottedLotsNum) && !isNaN(sharesPerLotNum)
           ? allottedLotsNum * sharesPerLotNum
           : appliedLotsNum * sharesPerLotNum;
+
+      const finalPrice = allotmentStatus === 'Allotted' ? finalPriceNum : priceHighNum;
       const investedAmt = ipoInvestedAmount;
 
       payload = {
@@ -317,7 +426,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         assetType: category,
         broker,
         quantity: effectiveQuantity,
-        buyPrice: issuePriceNum || 0,
+        buyPrice: finalPrice || 0,
         buyDate: applicationDate,
         purchaseDate: applicationDate,
         notes: notes.trim() || undefined,
@@ -329,13 +438,16 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         investedAmount: investedAmt,
         // New IPO fields
         companyName: name.trim(),
-        issuePrice: issuePriceNum,
+        issuePrice: finalPrice || 0,
         appliedLots: appliedLotsNum,
         sharesPerLot: sharesPerLotNum,
         allottedLots: allotmentStatus === 'Allotted' ? allottedLotsNum : 0,
         allotmentStatus,
         applicationDate,
         listingDate: listingDate || undefined,
+        priceLow: priceLowNum,
+        priceHigh: priceHighNum,
+        appliedAmount: appliedLotsNum * sharesPerLotNum * priceHighNum,
         // Keep legacy fields for service layer compatibility
         ipoLotsApplied: appliedLotsNum,
         ipoQuantityApplied: appliedLotsNum * sharesPerLotNum,
@@ -343,9 +455,10 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           : allotmentStatus === 'Not Allotted' ? 'Not Allotted'
           : 'Applied',
         ipoQuantityAllotted: allotmentStatus === 'Allotted' ? allottedLotsNum * sharesPerLotNum : 0,
-        ipoAllotmentPrice: issuePriceNum,
+        ipoAllotmentPrice: finalPrice || 0,
       } as Omit<Investment, 'id'>;
     } else {
+      const isMF = type === 'Mutual Fund';
       payload = {
         assetName: name.trim(),
         category,
@@ -361,6 +474,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         isDemo: false,
         customAssetType: type === 'Other' ? customType.trim() : undefined,
         customBroker: broker === 'Other' ? customBroker.trim() : undefined,
+        ...(isMF ? { units: qtyNum, nav: priceNum, investedAmount: standardInvestedAmount } : {})
       } as Omit<Investment, 'id'>;
     }
 
@@ -504,32 +618,48 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════
-              IPO-SPECIFIC SECTION
-          ═══════════════════════════════════════════════════════════ */}
+          {/* ── IPO-SPECIFIC SECTION ────────────────────────────────────────── */}
           {isIPO && (
             <div className="animate-slide-in space-y-5 rounded-2xl border border-indigo-500/20 bg-indigo-500/[0.03] p-4">
               <p className="text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider">
                 IPO Details
               </p>
 
-              {/* Issue Price, Lots, Shares per Lot */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Price Band (Lower Price, Upper Price) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
-                    💰 IPO Price per Share *
+                    💰 Lower Price *
                   </label>
                   <input
                     type="number"
                     step="any"
-                    value={issuePrice}
-                    onChange={(e) => setIssuePrice(e.target.value)}
-                    placeholder="₹120"
-                    className={inputClass(errors.issuePrice)}
+                    value={priceLow}
+                    onChange={(e) => setPriceLow(e.target.value)}
+                    placeholder="280"
+                    className={inputClass(errors.priceLow)}
                   />
-                  {errors.issuePrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.issuePrice}</p>}
+                  {errors.priceLow && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.priceLow}</p>}
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                    💰 Upper Price *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={priceHigh}
+                    onChange={(e) => setPriceHigh(e.target.value)}
+                    placeholder="300"
+                    className={inputClass(errors.priceHigh)}
+                  />
+                  {errors.priceHigh && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.priceHigh}</p>}
+                </div>
+              </div>
+
+              {/* Lots & Shares per lot */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
                     📦 Applied Lots *
@@ -556,7 +686,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     min="1"
                     value={sharesPerLot}
                     onChange={(e) => setSharesPerLot(e.target.value)}
-                    placeholder="100"
+                    placeholder="50"
                     className={inputClass(errors.sharesPerLot)}
                   />
                   {errors.sharesPerLot && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.sharesPerLot}</p>}
@@ -567,7 +697,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
               {ipoAppliedAmount > 0 && (
                 <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-xs">
                   <span className="text-slate-500 dark:text-slate-400 font-semibold">
-                    Applied Amount ({appliedLots} lot{appliedLotsNum !== 1 ? 's' : ''} × {sharesPerLot} × ₹{issuePrice})
+                    Applied Amount ({appliedLots} lot{appliedLotsNum !== 1 ? 's' : ''} × {sharesPerLot} × ₹{priceHigh})
                   </span>
                   <span className="text-amber-600 dark:text-amber-400 font-extrabold text-sm">
                     {formatCurrency(ipoAppliedAmount)}
@@ -598,22 +728,39 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                 </div>
               </div>
 
-              {/* Allotted Lots – only when status = Allotted */}
+              {/* Allotted Details – only when status = Allotted */}
               {allotmentStatus === 'Allotted' && (
-                <div className="animate-slide-in">
-                  <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
-                    🎟️ Allotted Lots *
-                  </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    value={allottedLots}
-                    onChange={(e) => setAllottedLots(e.target.value)}
-                    placeholder="e.g. 1"
-                    className={inputClass(errors.allottedLots)}
-                  />
-                  {errors.allottedLots && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.allottedLots}</p>}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slide-in">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      🎟️ Allotted Lots *
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={allottedLots}
+                      onChange={(e) => setAllottedLots(e.target.value)}
+                      placeholder="e.g. 1"
+                      className={inputClass(errors.allottedLots)}
+                    />
+                    {errors.allottedLots && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.allottedLots}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      💰 Final / Allotted Price Per Share *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={finalAllotmentPrice}
+                      onChange={(e) => setFinalAllotmentPrice(e.target.value)}
+                      placeholder="e.g. ₹300"
+                      className={inputClass(errors.finalAllotmentPrice)}
+                    />
+                    {errors.finalAllotmentPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.finalAllotmentPrice}</p>}
+                  </div>
                 </div>
               )}
 
@@ -641,7 +788,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     </span>
                   ) : allotmentStatus === 'Allotted' && ipoInvestedAmount > 0 ? (
                     <span className="text-slate-500 text-xs font-medium">
-                      {allottedLots} lot{allottedLotsNum !== 1 ? 's' : ''} × {sharesPerLot} shares × ₹{issuePrice}
+                      {allottedLots} lot{allottedLotsNum !== 1 ? 's' : ''} × {sharesPerLot} shares × ₹{finalAllotmentPrice}
                     </span>
                   ) : (
                     <span className="text-slate-400 text-xs font-medium italic">Not counted until allotted</span>
@@ -659,43 +806,102 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           ═══════════════════════════════════════════════════════════ */}
           {!isIPO && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                    Quantity / Units *
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="0"
-                    className={inputClass(errors.quantity)}
-                  />
-                  {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
-                </div>
+              {type === 'Mutual Fund' ? (
+                // Mutual Fund specific inputs
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                        Investment Amount (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={mfInvestmentAmount}
+                        onChange={(e) => handleMfAmountChange(e.target.value)}
+                        placeholder="0.00"
+                        className={inputClass(errors.quantity || errors.buyPrice)}
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                    Buy Price / Price per Unit *
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={buyPrice}
-                    onChange={(e) => setBuyPrice(e.target.value)}
-                    placeholder="0.00"
-                    className={inputClass(errors.buyPrice)}
-                  />
-                  {errors.buyPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.buyPrice}</p>}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                        NAV (₹ per unit) *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={mfNav}
+                        onChange={(e) => handleMfNavChange(e.target.value)}
+                        placeholder="0.00"
+                        className={inputClass(errors.buyPrice)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                        Units *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={mfUnits}
+                        onChange={(e) => handleMfUnitsChange(e.target.value)}
+                        placeholder="0.0000"
+                        className={inputClass(errors.quantity)}
+                      />
+                    </div>
+                  </div>
+                  {(errors.quantity || errors.buyPrice) && (
+                    <p className="text-red-500 text-xs mt-1 font-semibold">
+                      {errors.quantity || errors.buyPrice}
+                    </p>
+                  )}
                 </div>
-              </div>
+              ) : (
+                // Standard fields
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                      Quantity / Units *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      placeholder="0"
+                      className={inputClass(errors.quantity)}
+                    />
+                    {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
+                      Buy Price / Price per Unit *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={buyPrice}
+                      onChange={(e) => setBuyPrice(e.target.value)}
+                      placeholder="0.00"
+                      className={inputClass(errors.buyPrice)}
+                    />
+                    {errors.buyPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.buyPrice}</p>}
+                  </div>
+                </div>
+              )}
 
               {/* Invested Amount Card */}
               <div className="bg-indigo-500/[0.02] dark:bg-indigo-500/[0.04] border border-indigo-500/10 rounded-2xl p-4 flex justify-between items-center text-xs font-bold shadow-sm">
                 <div>
                   <span className="text-slate-400 dark:text-slate-500 block text-[9px] uppercase tracking-wider mb-0.5">Calculated Principal</span>
-                  <span className="text-slate-400 font-medium">{quantity || '0'} × {buyPrice || '0.00'}</span>
+                  {type === 'Mutual Fund' ? (
+                    <span className="text-slate-400 font-medium">{mfUnits || '0'} units × ₹{mfNav || '0.00'} NAV</span>
+                  ) : (
+                    <span className="text-slate-400 font-medium">{quantity || '0'} × {buyPrice || '0.00'}</span>
+                  )}
                 </div>
                 <span className="text-lg font-extrabold text-indigo-600 dark:text-indigo-400">
                   {formatCurrency(standardInvestedAmount)}

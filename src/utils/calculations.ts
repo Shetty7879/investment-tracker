@@ -71,6 +71,84 @@ export const calculateFDDetails = (
 };
 
 /**
+ * Heuristics helper to resolve Mutual Fund units, NAV, and investedAmount
+ * distinguishing whether buyPrice was stored as investment amount or actual NAV.
+ */
+export const getMutualFundMetrics = (inv: {
+  quantity: number;
+  buyPrice: number;
+  units?: number;
+  nav?: number;
+  investedAmount?: number;
+}) => {
+  const units = inv.units ?? inv.quantity ?? 0;
+
+  // Heuristic to check if buyPrice was stored as investment amount
+  const isFractional = units % 1 !== 0;
+  const isBuyPriceRound = inv.buyPrice >= 50 && inv.buyPrice % 50 === 0;
+  const product = units * inv.buyPrice;
+  const isProductNotRound = product % 50 !== 0;
+  const isOldBuyPriceActuallyInvestmentAmount = isFractional && isBuyPriceRound && isProductNotRound;
+
+  let investedAmount = 0;
+  let nav = 0;
+
+  if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+    investedAmount = inv.investedAmount;
+    nav = inv.nav ?? (units > 0 ? investedAmount / units : 0);
+  } else if (isOldBuyPriceActuallyInvestmentAmount) {
+    investedAmount = inv.buyPrice;
+    nav = units > 0 ? investedAmount / units : 0;
+  } else {
+    nav = inv.nav ?? inv.buyPrice ?? 0;
+    investedAmount = units * nav;
+  }
+
+  return {
+    units,
+    nav,
+    investedAmount
+  };
+};
+
+/**
+ * Heuristics helper for Mutual Fund transactions
+ */
+export const getMutualFundTransactionMetrics = (
+  tx: { quantity?: number; price?: number; amount?: number },
+  parentInv?: { assetType?: string; category?: string }
+) => {
+  const isMF = parentInv?.assetType === 'Mutual Funds' || parentInv?.category === 'Mutual Funds';
+  const qty = tx.quantity ?? 1;
+  const price = tx.price ?? 0;
+
+  if (!isMF) {
+    return { quantity: qty, price, amount: qty * price };
+  }
+
+  // Heuristic to check if transaction price was stored as investment amount
+  const isFractional = qty % 1 !== 0;
+  const isPriceRound = price >= 50 && price % 50 === 0;
+  const product = qty * price;
+  const isProductNotRound = product % 50 !== 0;
+  const isOldPriceActuallyInvestmentAmount = isFractional && isPriceRound && isProductNotRound;
+
+  let amount = tx.amount ?? (qty * price);
+  let nav = price;
+
+  if (isOldPriceActuallyInvestmentAmount) {
+    amount = price;
+    nav = qty > 0 ? price / qty : 0;
+  }
+
+  return {
+    quantity: qty,
+    price: nav, // Store resolved NAV as price
+    amount
+  };
+};
+
+/**
  * Calculates raw invested, current value, profitLoss, and return percent dynamically
  * based on the transaction log history of the holding.
  */
@@ -89,18 +167,21 @@ export const calculateInvestmentMetrics = (
   // 1. Gather transactions array. Auto-generate fallback BUY transaction if empty
   let txList: Transaction[] = [];
   if (inv.transactions && inv.transactions.length > 0) {
-    txList = inv.transactions.map((tx, idx) => ({
-      id: tx.id || `fallback-tx-${inv.id}-${idx}`,
-      investmentId: inv.id,
-      type: tx.type || 'BUY',
-      quantity: tx.quantity ?? 1,
-      price: tx.price ?? 0,
-      amount: (tx.quantity ?? 1) * (tx.price ?? 0),
-      charges: tx.charges ?? 0,
-      date: tx.date || inv.buyDate || inv.purchaseDate || '2026-01-01',
-      isDemo: !!inv.isDemo,
-      createdAt: tx.createdAt || new Date().toISOString()
-    }));
+    txList = inv.transactions.map((tx, idx) => {
+      const metrics = getMutualFundTransactionMetrics(tx, inv);
+      return {
+        id: tx.id || `fallback-tx-${inv.id}-${idx}`,
+        investmentId: inv.id,
+        type: tx.type || 'BUY',
+        quantity: metrics.quantity,
+        price: metrics.price,
+        amount: metrics.amount,
+        charges: tx.charges ?? 0,
+        date: tx.date || inv.buyDate || inv.purchaseDate || '2026-01-01',
+        isDemo: !!inv.isDemo,
+        createdAt: tx.createdAt || new Date().toISOString()
+      };
+    });
   } else {
     let qty = 1;
     let price = 0;
@@ -108,8 +189,9 @@ export const calculateInvestmentMetrics = (
       qty = inv.quantity ?? 1;
       price = inv.buyPrice ?? 0;
     } else if (inv.assetType === 'Mutual Funds') {
-      qty = inv.units ?? 1;
-      price = inv.nav ?? ((inv.investedAmount ?? 0) / qty);
+      const mf = getMutualFundMetrics(inv);
+      qty = mf.units;
+      price = mf.nav;
     } else if (inv.assetType === 'Fixed Deposits' || inv.assetType === 'Savings/Cash' || inv.assetType === 'IPOs') {
       qty = 1;
       price = inv.investedAmount ?? 0;
@@ -124,7 +206,7 @@ export const calculateInvestmentMetrics = (
         type: 'BUY',
         quantity: qty,
         price: price,
-        amount: qty * price,
+        amount: inv.assetType === 'Mutual Funds' ? getMutualFundMetrics(inv).investedAmount : (qty * price),
         charges: inv.charges ?? 0,
         date: inv.buyDate || inv.purchaseDate || '2026-01-01',
         isDemo: !!inv.isDemo,
@@ -144,7 +226,7 @@ export const calculateInvestmentMetrics = (
   // Process transaction logs
   txList.forEach(tx => {
     if (tx.type === 'BUY') {
-      const cost = tx.quantity * tx.price;
+      const cost = inv.assetType === 'Mutual Funds' ? tx.amount : (tx.quantity * tx.price);
       const nextQuantity = currentQuantity + tx.quantity;
       if (nextQuantity > 0) {
         averageBuyPrice = ((currentQuantity * averageBuyPrice) + cost) / nextQuantity;

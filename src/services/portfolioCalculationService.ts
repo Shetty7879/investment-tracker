@@ -1,6 +1,6 @@
 import type { Investment, Transaction, Goal } from '../types';
 import type { MarketPriceData } from './marketDataService';
-import { calculateFDDetails } from '../utils/calculations';
+import { calculateFDDetails, getMutualFundMetrics, getMutualFundTransactionMetrics } from '../utils/calculations';
 
 export interface HoldingMetrics extends Investment {
   quantity: number;
@@ -97,7 +97,20 @@ export const isIndianMarketOpen = (date: Date): boolean => {
 export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[]): Transaction[] => {
   const holdingTxs = allTxs.filter(tx => tx.investmentId === inv.id);
   if (holdingTxs.length > 0) {
-    return [...holdingTxs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sorted = [...holdingTxs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const isMF = inv.category === 'Mutual Funds' || inv.assetType === 'Mutual Funds';
+    if (isMF) {
+      return sorted.map(tx => {
+        const metrics = getMutualFundTransactionMetrics(tx, inv);
+        return {
+          ...tx,
+          quantity: metrics.quantity,
+          price: metrics.price,
+          amount: metrics.amount
+        };
+      });
+    }
+    return sorted;
   }
 
   // Generate fallback transaction
@@ -106,8 +119,9 @@ export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[])
   const category = inv.category || inv.assetType || 'Stocks';
 
   if (category === 'Mutual Funds') {
-    qty = inv.units ?? inv.quantity ?? 1;
-    price = inv.nav ?? inv.buyPrice ?? ((inv.investedAmount ?? 0) / qty);
+    const mf = getMutualFundMetrics(inv);
+    qty = mf.units;
+    price = mf.nav;
   } else if (category === 'Gold' || category === 'Silver' || category === 'Platinum') {
     qty = inv.weightGrams ?? inv.quantity ?? 1;
     price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
@@ -126,7 +140,7 @@ export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[])
       type: 'BUY',
       quantity: qty,
       price: price,
-      amount: qty * price,
+      amount: category === 'Mutual Funds' ? getMutualFundMetrics(inv).investedAmount : (qty * price),
       charges: inv.charges ?? 0,
       date: inv.buyDate || inv.purchaseDate || '2026-01-01',
       isDemo: !!inv.isDemo,
@@ -154,7 +168,7 @@ export const calculateHoldingMetrics = (
   // Process transaction logs
   txList.forEach(tx => {
     if (tx.type === 'BUY') {
-      const grossCost = tx.quantity * tx.price;
+      const grossCost = category === 'Mutual Funds' ? tx.amount : (tx.quantity * tx.price);
       const totalCost = grossCost + tx.charges;
       const nextQuantity = currentQuantity + tx.quantity;
       if (nextQuantity > 0) {
@@ -482,7 +496,7 @@ export const calculateMonthlyInvestments = (
         }
 
         if (tx.type === 'BUY') {
-          return sum + (tx.quantity * tx.price + tx.charges);
+          return sum + ((tx.amount ?? (tx.quantity * tx.price)) + tx.charges);
         }
       }
       return sum;

@@ -82,7 +82,7 @@ export const Settings: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        
+
         {/* Appearance Configuration */}
         <section className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-0 mb-4 pb-2 border-b border-slate-100 dark:border-slate-850 uppercase tracking-wider text-[11px] text-slate-400 dark:text-slate-500">
@@ -262,8 +262,10 @@ export const Settings: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-450">Connected</span>
+                <span className={`h-2.5 w-2.5 rounded-full ${userEmail ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-700'}`}></span>
+                <span className={`text-xs font-semibold ${userEmail ? 'text-emerald-600 dark:text-emerald-450' : 'text-slate-400 dark:text-slate-500'}`}>
+                  {userEmail ? 'Connected' : 'Not connected'}
+                </span>
               </div>
             </div>
 

@@ -69,13 +69,13 @@ export interface Investment {
   investedAmount?: number;
   currentValue?: number | null;
   transactions?: Partial<Transaction>[]; // Demoted to Partial for mock data loaders
-  
+
   // Mapped calculations
   profitLoss?: number | null;
   returnPercent?: number | null;
   realizedPL?: number;
   totalPL?: number;
-  
+
   // Market price metadata
   priceStatus?: 'live' | 'cached' | 'unavailable' | 'not_allocated';
   priceTimestamp?: number;
@@ -122,6 +122,8 @@ export interface Investment {
   allotmentStatus?: 'Applied' | 'Allotted' | 'Not Allotted' | 'Withdrawn';
   applicationDate?: string;
   listingDate?: string;
+  priceLow?: number;
+  priceHigh?: number;
 }
 
 export interface Goal {

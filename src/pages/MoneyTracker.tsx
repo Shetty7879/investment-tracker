@@ -159,7 +159,7 @@ export const MoneyTracker: React.FC = () => {
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={handleAddNew}
@@ -232,7 +232,7 @@ export const MoneyTracker: React.FC = () => {
           <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-880 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-6">
             <Coins className="h-8 w-8" />
           </div>
-          
+
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
             💸 No money records yet
           </h3>
@@ -314,14 +314,15 @@ export const MoneyTracker: React.FC = () => {
             </div>
 
             {finalReceiveRecords.length === 0 ? (
-              <div className="bg-slate-50/50 dark:bg-[#0d0f17]/40 border border-slate-150 dark:border-slate-850 p-6 rounded-2xl text-center text-slate-400 font-semibold">
+              <div className="bg-slate-50/55 dark:bg-[#0d0f17]/40 border border-slate-150 dark:border-slate-850 p-6 rounded-2xl text-center text-slate-400 font-semibold">
                 No money to receive matching your active filter.
               </div>
             ) : (
               <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl shadow-sm overflow-hidden">
-                <div className="overflow-x-auto w-full">
+                {/* Desktop View */}
+                <div className="hidden md:block overflow-x-auto w-full">
                   <table className="w-full border-collapse text-left text-xs font-semibold">
-                    <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
+                    <thead className="bg-slate-50/55 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
                       <tr>
                         <th className="px-6 py-4">Person</th>
                         <th className="px-4 py-4 text-right">Amount</th>
@@ -420,6 +421,93 @@ export const MoneyTracker: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Mobile Card List View */}
+                <div className="md:hidden space-y-4 p-4">
+                  {finalReceiveRecords.map(r => {
+                    const remaining = getRemainingAmount(r);
+                    const status = getStatus(r);
+                    const overdue = getOverdueStatus(r);
+                    const badgeStyle = getStatusBadgeStyle(status, overdue);
+                    const label = renderStatusLabel(status, overdue);
+
+                    return (
+                      <div
+                        key={r.id}
+                        className="bg-slate-50/55 dark:bg-slate-900/15 border border-slate-150 dark:border-slate-850 rounded-xl p-4 space-y-3 font-semibold text-[11px]"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0">
+                              {r.personName}
+                            </h4>
+                            {r.note && <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{r.note}</span>}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${badgeStyle}`}>
+                            {label}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px]">
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Amount</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{formatCurrency(r.amount)}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Received</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{formatCurrency(r.amountPaid)}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Remaining</span>
+                            <span className="font-extrabold text-indigo-650 dark:text-indigo-400">{formatCurrency(remaining)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 dark:text-slate-500">
+                          <span>Given: {r.date}</span>
+                          <span>Due: {r.dueDate || '—'}</span>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {remaining > 0 && (
+                            <>
+                              <button
+                                onClick={() => handleRecordPayment(r)}
+                                className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-amber-600 dark:text-amber-400 text-[10px] font-bold cursor-pointer min-h-[38px]"
+                                title="Record Payment"
+                              >
+                                <TrendingUp className="h-3.5 w-3.5" />
+                                <span>Pay</span>
+                              </button>
+                              <button
+                                onClick={() => handleMarkPaid(r.id)}
+                                className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-emerald-600 dark:text-emerald-400 text-[10px] font-bold cursor-pointer min-h-[38px]"
+                                title="Mark as Received"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                <span>Receive All</span>
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleEdit(r)}
+                            className="flex items-center justify-center p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 cursor-pointer min-h-[38px] min-w-[38px]"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="flex items-center justify-center p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-655 dark:text-slate-400 cursor-pointer min-h-[38px] min-w-[38px]"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -433,14 +521,15 @@ export const MoneyTracker: React.FC = () => {
             </div>
 
             {finalGiveRecords.length === 0 ? (
-              <div className="bg-slate-50/50 dark:bg-[#0d0f17]/40 border border-slate-150 dark:border-slate-850 p-6 rounded-2xl text-center text-slate-400 font-semibold">
+              <div className="bg-slate-50/55 dark:bg-[#0d0f17]/40 border border-slate-150 dark:border-slate-850 p-6 rounded-2xl text-center text-slate-400 font-semibold">
                 No money to give matching your active filter.
               </div>
             ) : (
               <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl shadow-sm overflow-hidden">
-                <div className="overflow-x-auto w-full">
+                {/* Desktop View */}
+                <div className="hidden md:block overflow-x-auto w-full">
                   <table className="w-full border-collapse text-left text-xs font-semibold">
-                    <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
+                    <thead className="bg-slate-50/55 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
                       <tr>
                         <th className="px-6 py-4">Person</th>
                         <th className="px-4 py-4 text-right">Amount</th>
@@ -519,14 +608,14 @@ export const MoneyTracker: React.FC = () => {
                                 )}
                                 <button
                                   onClick={() => handleEdit(r)}
-                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-655 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
                                   title="Edit"
                                 >
                                   <Edit2 className="h-4 w-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r.id)}
-                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-655 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
                                   title="Delete"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -538,6 +627,93 @@ export const MoneyTracker: React.FC = () => {
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Card List View */}
+                <div className="md:hidden space-y-4 p-4">
+                  {finalGiveRecords.map(r => {
+                    const remaining = getRemainingAmount(r);
+                    const status = getStatus(r);
+                    const overdue = getOverdueStatus(r);
+                    const badgeStyle = getStatusBadgeStyle(status, overdue);
+                    const label = renderStatusLabel(status, overdue);
+
+                    return (
+                      <div
+                        key={r.id}
+                        className="bg-slate-50/55 dark:bg-slate-900/15 border border-slate-150 dark:border-slate-850 rounded-xl p-4 space-y-3 font-semibold text-[11px]"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0">
+                              {r.personName}
+                            </h4>
+                            {r.note && <span className="block text-[10px] text-slate-400 dark:text-slate-550 mt-0.5">{r.note}</span>}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${badgeStyle}`}>
+                            {label}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[10px]">
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Amount</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{formatCurrency(r.amount)}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Paid</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{formatCurrency(r.amountPaid)}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Remaining</span>
+                            <span className="font-extrabold text-indigo-655 dark:text-indigo-400">{formatCurrency(remaining)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800 text-[9px] text-slate-400 dark:text-slate-500">
+                          <span>Owed: {r.date}</span>
+                          <span>Due: {r.dueDate || '—'}</span>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          {remaining > 0 && (
+                            <>
+                              <button
+                                onClick={() => handleRecordPayment(r)}
+                                className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-amber-600 dark:text-amber-400 text-[10px] font-bold cursor-pointer min-h-[38px]"
+                                title="Record Payment"
+                              >
+                                <TrendingUp className="h-3.5 w-3.5" />
+                                <span>Pay</span>
+                              </button>
+                              <button
+                                onClick={() => handleMarkPaid(r.id)}
+                                className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-emerald-600 dark:text-emerald-400 text-[10px] font-bold cursor-pointer min-h-[38px]"
+                                title="Mark as Paid"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                <span>Pay All</span>
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleEdit(r)}
+                            className="flex items-center justify-center p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-655 dark:text-slate-400 cursor-pointer min-h-[38px] min-w-[38px]"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="flex items-center justify-center p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-655 dark:text-slate-400 cursor-pointer min-h-[38px] min-w-[38px]"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

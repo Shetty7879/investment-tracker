@@ -105,7 +105,7 @@ export const Investments: React.FC = () => {
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={handleAddNew}
@@ -123,7 +123,7 @@ export const Investments: React.FC = () => {
           <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-880 flex items-center justify-center text-slate-405 dark:text-slate-500 mb-6">
             <Briefcase className="h-8 w-8" />
           </div>
-          
+
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
             No investments tracked yet
           </h3>
@@ -141,10 +141,10 @@ export const Investments: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          
+
           {/* Filters & Sorters Controls */}
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-[#0d0f17] p-4 border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm">
-            
+
             {/* Asset Type Filter */}
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 mr-2 flex items-center gap-1">
@@ -182,7 +182,7 @@ export const Investments: React.FC = () => {
 
             {/* Sorters and Global States */}
             <div className="flex flex-wrap items-center gap-3 font-semibold">
-              
+
               {/* Sorter */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase font-bold text-slate-405 dark:text-slate-555 flex items-center gap-1">
@@ -240,11 +240,25 @@ export const Investments: React.FC = () => {
                       const ipoStatus = inv.allotmentStatus || (inv.ipoAllotmentStatus as string) || 'Applied';
                       const ipoAppliedLots = inv.appliedLots ?? inv.ipoLotsApplied ?? 0;
                       const ipoSharesPerLot = inv.sharesPerLot ?? 0;
-                      const ipoIssuePrice = inv.issuePrice ?? inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+                      const ipoAllotmentPrice = inv.ipoAllotmentPrice ?? inv.issuePrice ?? inv.buyPrice ?? 0;
                       const ipoAllottedLots = inv.allottedLots ?? 0;
                       const ipoInvested = ipoStatus === 'Allotted' && ipoAllottedLots > 0 && ipoSharesPerLot > 0
-                        ? ipoAllottedLots * ipoSharesPerLot * ipoIssuePrice
+                        ? ipoAllottedLots * ipoSharesPerLot * ipoAllotmentPrice
                         : 0;
+
+                      const ipoPriceLow = inv.priceLow;
+                      const ipoPriceHigh = inv.priceHigh;
+                      let ipoPriceDisplay = '';
+                      if (ipoPriceLow && ipoPriceHigh) {
+                        ipoPriceDisplay = ipoPriceLow === ipoPriceHigh
+                          ? formatCurrency(ipoPriceLow)
+                          : `${formatCurrency(ipoPriceLow)} – ${formatCurrency(ipoPriceHigh)}`;
+                      } else {
+                        ipoPriceDisplay = formatCurrency(ipoAllotmentPrice);
+                      }
+                      if (ipoStatus === 'Allotted') {
+                        ipoPriceDisplay = `Allotted: ${formatCurrency(ipoAllotmentPrice)}`;
+                      }
 
                       const ipoStatusColors: Record<string, string> = {
                         'Applied': 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -297,7 +311,7 @@ export const Investments: React.FC = () => {
 
                           {/* Price */}
                           <td className="px-4 py-4 text-right text-slate-700 dark:text-slate-300 whitespace-nowrap font-bold">
-                            {formatCurrency(isIPORow ? ipoIssuePrice : (inv.buyPrice ?? 0))}
+                            {isIPORow ? ipoPriceDisplay : formatCurrency(inv.buyPrice ?? 0)}
                           </td>
 
                           {/* Invested Amount */}
@@ -309,7 +323,7 @@ export const Investments: React.FC = () => {
                                 <span className="text-slate-400 dark:text-slate-600 font-semibold italic text-[10px]">Not counted</span>
                               )
                             ) : (
-                              <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}</span>
+                              <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency(inv.investedAmount)}</span>
                             )}
                           </td>
 
@@ -378,11 +392,25 @@ export const Investments: React.FC = () => {
                 const ipoStatus = inv.allotmentStatus || (inv.ipoAllotmentStatus as string) || 'Applied';
                 const ipoAppliedLots = inv.appliedLots ?? inv.ipoLotsApplied ?? 0;
                 const ipoSharesPerLot = inv.sharesPerLot ?? 0;
-                const ipoIssuePrice = inv.issuePrice ?? inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+                const ipoAllotmentPrice = inv.ipoAllotmentPrice ?? inv.issuePrice ?? inv.buyPrice ?? 0;
                 const ipoAllottedLots = inv.allottedLots ?? 0;
                 const ipoInvested = ipoStatus === 'Allotted' && ipoAllottedLots > 0 && ipoSharesPerLot > 0
-                  ? ipoAllottedLots * ipoSharesPerLot * ipoIssuePrice
+                  ? ipoAllottedLots * ipoSharesPerLot * ipoAllotmentPrice
                   : 0;
+
+                const ipoPriceLow = inv.priceLow;
+                const ipoPriceHigh = inv.priceHigh;
+                let ipoPriceDisplay = '';
+                if (ipoPriceLow && ipoPriceHigh) {
+                  ipoPriceDisplay = ipoPriceLow === ipoPriceHigh
+                    ? formatCurrency(ipoPriceLow)
+                    : `${formatCurrency(ipoPriceLow)} – ${formatCurrency(ipoPriceHigh)}`;
+                } else {
+                  ipoPriceDisplay = formatCurrency(ipoAllotmentPrice);
+                }
+                if (ipoStatus === 'Allotted') {
+                  ipoPriceDisplay = `Allotted: ${formatCurrency(ipoAllotmentPrice)}`;
+                }
 
                 const ipoStatusColors: Record<string, string> = {
                   'Applied': 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -440,8 +468,8 @@ export const Investments: React.FC = () => {
                             <span className="font-extrabold text-slate-900 dark:text-white">{ipoAppliedLots} lot{ipoAppliedLots !== 1 ? 's' : ''}{ipoSharesPerLot > 0 ? ` × ${ipoSharesPerLot} shares` : ''}</span>
                           </div>
                           <div>
-                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">💰 Issue Price</span>
-                            <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(ipoIssuePrice)}</span>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider mb-0.5">💰 Issue Price</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{ipoPriceDisplay}</span>
                           </div>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Invested Amount</span>
@@ -465,16 +493,20 @@ export const Investments: React.FC = () => {
                       ) : (
                         <>
                           <div>
-                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Quantity / Units</span>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">
+                              {inv.category === 'Mutual Funds' ? 'Units' : 'Quantity / Units'}
+                            </span>
                             <span className="font-extrabold text-slate-900 dark:text-white">{inv.quantity}</span>
                           </div>
                           <div>
-                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Buy Price / Price per Unit</span>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">
+                              {inv.category === 'Mutual Funds' ? 'NAV' : 'Buy Price / Price per Unit'}
+                            </span>
                             <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(inv.buyPrice ?? 0)}</span>
                           </div>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Invested Amount</span>
-                            <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}</span>
+                            <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency(inv.investedAmount)}</span>
                           </div>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider mb-0.5">Buy Date</span>

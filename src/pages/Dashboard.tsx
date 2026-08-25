@@ -69,7 +69,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-slide-in pb-8 font-semibold text-xs text-slate-700 dark:text-slate-350">
-      
+
       {/* Portfolio Overview Section Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -78,7 +78,7 @@ export const Dashboard: React.FC = () => {
             Your investment and money overview.
           </p>
         </div>
-        
+
         {/* Global Filter Switchers & Quick Actions */}
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -250,7 +250,7 @@ export const Dashboard: React.FC = () => {
                           {inv.quantity}
                         </td>
                         <td className="px-4 py-3.5 text-right font-extrabold text-indigo-650 dark:text-indigo-400 whitespace-nowrap">
-                          {formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}
+                          {formatCurrency(inv.investedAmount)}
                         </td>
                         <td className="px-4 py-3.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
                           {inv.buyDate || inv.purchaseDate || '—'}
@@ -294,7 +294,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                       <div>
                         <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Invested</span>
-                        <span className="font-extrabold text-indigo-650 dark:text-indigo-400">{formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}</span>
+                        <span className="font-extrabold text-indigo-650 dark:text-indigo-400">{formatCurrency(inv.investedAmount)}</span>
                       </div>
                     </div>
                   </div>
@@ -329,7 +329,7 @@ export const Dashboard: React.FC = () => {
                 {formatCurrency(totalToReceive)}
               </span>
               <span className="text-[10px] text-slate-405 dark:text-slate-500 font-semibold block mt-1">
-                {pendingReceiveCount > 0 
+                {pendingReceiveCount > 0
                   ? `${pendingReceiveCount} ${pendingReceiveCount === 1 ? 'person owes you' : 'people owe you'}`
                   : '0 people owe you'
                 }
@@ -348,7 +348,7 @@ export const Dashboard: React.FC = () => {
                 {formatCurrency(totalToGive)}
               </span>
               <span className="text-[10px] text-slate-405 dark:text-slate-500 font-semibold block mt-1">
-                {pendingGiveCount > 0 
+                {pendingGiveCount > 0
                   ? `${pendingGiveCount} pending ${pendingGiveCount === 1 ? 'payment' : 'payments'}`
                   : '0 pending payments'
                 }
