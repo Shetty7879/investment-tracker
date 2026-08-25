@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { supabase } from './utils/supabase';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { Dashboard } from './pages/Dashboard';
@@ -10,6 +11,7 @@ import { Settings } from './pages/Settings';
 import { MoneyTracker } from './pages/MoneyTracker';
 import { Toast } from './components/Toast';
 import { PageTransition } from './components/PageTransition';
+import Login from './pages/Login';
 
 const AppContent: React.FC = () => {
   const { activeTab } = useApp();
@@ -44,6 +46,36 @@ const AppContent: React.FC = () => {
 };
 
 function App() {
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login />;
+  }
+
   return (
     <AppProvider>
       <AppContent />

@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Moon, Sun, ShieldAlert, Download, Upload, Trash2, Settings as SettingsIcon } from 'lucide-react';
+import { Moon, Sun, ShieldAlert, Download, Upload, Trash2, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
 
 export const Settings: React.FC = () => {
   const {
@@ -13,7 +13,22 @@ export const Settings: React.FC = () => {
     clearAllData,
     exportData,
     importData,
+    lastSyncedAt,
+    migrateLocalData,
+    isSyncing,
   } = useApp();
+
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    import('../utils/supabase').then(({ supabase }) => {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data?.user) {
+          setUserEmail(data.user.email || 'Authenticated User');
+        }
+      });
+    });
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -227,6 +242,103 @@ export const Settings: React.FC = () => {
                 <span className="block text-xs text-slate-405 dark:text-slate-500 mt-0.5">Permanently wipe files</span>
               </div>
               <Trash2 className="h-5 w-5 text-red-500 flex-shrink-0" />
+            </button>
+          </div>
+        </section>
+
+        {/* Cloud Sync Configuration */}
+        <section className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-0 mb-4 pb-2 border-b border-slate-100 dark:border-slate-850 uppercase tracking-wider text-[11px] text-slate-400 dark:text-slate-555">
+            Cloud Synchronization
+          </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm text-slate-800 dark:text-slate-250">
+                  FridayTrack Cloud Service
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5">
+                  Securely backing up real investments to your personal cloud database.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-450">Connected</span>
+              </div>
+            </div>
+
+            {userEmail && (
+              <div className="text-xs text-slate-450 dark:text-slate-500">
+                Logged in as: <span className="font-semibold text-slate-650 dark:text-slate-350">{userEmail}</span>
+              </div>
+            )}
+
+            <div className="border-t border-slate-100 dark:border-slate-850/60 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="block text-xs font-semibold text-slate-400 dark:text-slate-550">
+                  Last Cloud Sync
+                </span>
+                <span className="block text-sm font-bold text-slate-700 dark:text-slate-200 mt-1">
+                  {lastSyncedAt ? (
+                    new Date(lastSyncedAt).toLocaleString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true
+                    })
+                  ) : (
+                    'Not synced yet'
+                  )}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    await migrateLocalData();
+                  }}
+                  disabled={isSyncing}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500 hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-semibold text-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync Local Data'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-400 dark:text-slate-555/80 bg-slate-50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-850/60 rounded-xl p-3">
+              Migration Status: <span className="font-semibold text-slate-700 dark:text-slate-300">
+                {localStorage.getItem('supabase_migrated_v1') === 'true' ? 'Migrated' : 'Not migrated'}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* Account & Security */}
+        <section className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-0 mb-4 pb-2 border-b border-slate-100 dark:border-slate-850 uppercase tracking-wider text-[11px] text-slate-400 dark:text-slate-500">
+            Account & Security
+          </h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-sm text-slate-800 dark:text-slate-250">
+                Log Out of Account
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5">
+                Sign out of your session on this device.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to log out?')) {
+                  import('../utils/supabase').then(({ supabase }) => supabase.auth.signOut());
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 dark:border-red-500/10 hover:bg-red-50 dark:hover:bg-red-500/5 text-red-650 dark:text-red-450 font-semibold text-xs transition-all cursor-pointer"
+            >
+              Log Out
             </button>
           </div>
         </section>

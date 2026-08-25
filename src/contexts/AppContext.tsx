@@ -8,6 +8,11 @@ import {
 import { fetchMarketPrices } from '../services/marketDataService';
 import type { MarketPriceData } from '../services/marketDataService';
 import { isIndianMarketOpen } from '../services/portfolioCalculationService';
+import {
+  loadFridayTrackData,
+  saveFridayTrackData,
+  migrateLocalStorageToSupabase
+} from '../services/fridaytrackDataService';
 
 const migrateMoneyRecords = (records: any[]): MoneyRecord[] => {
   if (!records || !Array.isArray(records)) return [];
@@ -86,6 +91,10 @@ interface AppContextType {
   marketPrices: Record<string, MarketPriceData>;
   refreshMarketPrices: () => Promise<void>;
   isRefreshingPrices: boolean;
+  isCloudDataLoading: boolean;
+  lastSyncedAt: string | null;
+  migrateLocalData: () => Promise<boolean>;
+  isSyncing: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -105,22 +114,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return storage.get<number>('monthly_target_pref', 0);
   });
 
-  const [investments, setInvestments] = useState<Investment[]>(() => {
-    return storage.get<Investment[]>('investments', []);
-  });
+  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [moneyRecords, setMoneyRecords] = useState<MoneyRecord[]>([]);
+  const [isCloudDataLoading, setIsCloudDataLoading] = useState(true);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    return storage.get<Transaction[]>('transactions', []);
-  });
-
-  const [goals, setGoals] = useState<Goal[]>(() => {
-    return storage.get<Goal[]>('goals', []);
-  });
-
-  const [moneyRecords, setMoneyRecords] = useState<MoneyRecord[]>(() => {
-    const raw = storage.get<any[]>('moneyTracker', []) || storage.get<any[]>('money_records', []);
-    return migrateMoneyRecords(raw);
-  });
+  const migrateLocalData = async (): Promise<boolean> => {
+    if (isSyncing) return false;
+    setIsSyncing(true);
+    try {
+      showToast('Syncing local data with cloud...', 'info');
+      const result = await migrateLocalStorageToSupabase();
+      if (result.success) {
+        showToast('Sync complete! Local data is now secured in the cloud.', 'success');
+        const updatedCloud = await loadFridayTrackData();
+        if (updatedCloud) {
+          setInvestments(updatedCloud.investments);
+          setTransactions(updatedCloud.transactions);
+          setGoals(updatedCloud.goals);
+          setMoneyRecords(updatedCloud.money_records);
+          if (updatedCloud.updated_at) {
+            setLastSyncedAt(updatedCloud.updated_at);
+          }
+        }
+        return true;
+      } else {
+        showToast(`Sync failed: ${result.message}`, 'warning');
+        return false;
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'An error occurred during local data sync.', 'warning');
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const [toast, setToast] = useState<ToastData | null>(null);
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilterType>('Me');
@@ -143,6 +175,106 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return validTabs.includes(hash) ? hash : 'dashboard';
   });
 
+  // Helper to push state changes to Supabase
+  const syncWithCloud = async (
+    nextInvs: Investment[],
+    nextTxs: Transaction[],
+    nextGoals: Goal[],
+    nextMoney: MoneyRecord[]
+  ): Promise<boolean> => {
+    try {
+      const success = await saveFridayTrackData({
+        investments: nextInvs,
+        transactions: nextTxs,
+        goals: nextGoals,
+        money_records: nextMoney,
+        preferences: { theme, currency, monthlyTarget }
+      });
+      if (success) {
+        setLastSyncedAt(new Date().toISOString());
+      }
+      return success;
+    } catch (err: any) {
+      console.error('Cloud synchronization error:', err);
+      showToast(err.message || 'Failed to sync with FridayTrack cloud database.', 'warning');
+      return false;
+    }
+  };
+
+  // Initial cloud loading and migration flow
+  useEffect(() => {
+    let active = true;
+
+    const initData = async () => {
+      try {
+        const cloudData = await loadFridayTrackData();
+        if (!active) return;
+
+        if (cloudData) {
+          setInvestments(cloudData.investments);
+          setTransactions(cloudData.transactions);
+          setGoals(cloudData.goals);
+          setMoneyRecords(cloudData.money_records);
+
+          if (cloudData.preferences) {
+            const prefs = cloudData.preferences;
+            if (prefs.theme && (prefs.theme === 'dark' || prefs.theme === 'light')) {
+              setTheme(prefs.theme);
+            }
+            if (prefs.currency && (prefs.currency === 'INR' || prefs.currency === 'USD' || prefs.currency === 'EUR')) {
+              setCurrencyState(prefs.currency);
+            }
+            if (typeof prefs.monthlyTarget === 'number') {
+              setMonthlyTargetState(prefs.monthlyTarget);
+            }
+          }
+        }
+
+        // Local storage one-time migration check
+        const isMigrated = localStorage.getItem('supabase_migrated_v1') === 'true';
+        if (!isMigrated) {
+          const localInvs = storage.get<Investment[]>('investments', []).filter(i => !i.isDemo);
+          const localTxs = storage.get<Transaction[]>('transactions', []).filter(t => !t.isDemo);
+          const localGoals = storage.get<Goal[]>('goals', []).filter(g => !g.isDemo);
+          const localMoneyRaw = storage.get<any[]>('moneyTracker', []) || storage.get<any[]>('money_records', []);
+          const hasLocalRealData = localInvs.length > 0 || localTxs.length > 0 || localGoals.length > 0 || localMoneyRaw.some(m => !m.isDemo);
+
+          if (hasLocalRealData) {
+            showToast('Syncing local data with cloud...', 'info');
+            const migrationResult = await migrateLocalStorageToSupabase();
+            if (migrationResult.success) {
+              showToast('Sync complete! Local data is now secured in the cloud.', 'success');
+              const updatedCloud = await loadFridayTrackData();
+              if (updatedCloud && active) {
+                setInvestments(updatedCloud.investments);
+                setTransactions(updatedCloud.transactions);
+                setGoals(updatedCloud.goals);
+                setMoneyRecords(updatedCloud.money_records);
+              }
+            } else {
+              showToast(`Local sync warning: ${migrationResult.message}`, 'warning');
+            }
+          } else {
+            localStorage.setItem('supabase_migrated_v1', 'true');
+          }
+        }
+      } catch (err: any) {
+        console.error('Initial data load failed:', err);
+        showToast('Failed to load cloud profile. Operating in local mode.', 'warning');
+      } finally {
+        if (active) {
+          setIsCloudDataLoading(false);
+        }
+      }
+    };
+
+    initData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     const root = window.document.documentElement;
     if (theme === 'dark') {
@@ -154,11 +286,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     storage.set('theme_pref', theme);
   }, [theme]);
-
-  // Synchronize moneyRecords state to localStorage
-  useEffect(() => {
-    storage.set('moneyTracker', moneyRecords);
-  }, [moneyRecords]);
 
   // Handle toast auto-dismiss
   useEffect(() => {
@@ -191,17 +318,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    storage.set('theme_pref', nextTheme);
+    saveFridayTrackData({
+      investments,
+      transactions,
+      goals,
+      money_records: moneyRecords,
+      preferences: { theme: nextTheme, currency, monthlyTarget }
+    }).catch(err => console.error('Failed to sync theme preference:', err));
   };
 
   const setCurrency = (curr: 'INR' | 'USD' | 'EUR') => {
     setCurrencyState(curr);
     storage.set('currency_pref', curr);
+    saveFridayTrackData({
+      investments,
+      transactions,
+      goals,
+      money_records: moneyRecords,
+      preferences: { theme, currency: curr, monthlyTarget }
+    }).catch(err => console.error('Failed to sync currency preference:', err));
   };
 
   const setMonthlyTarget = (target: number) => {
     setMonthlyTargetState(target);
     storage.set('monthly_target_pref', target);
+    saveFridayTrackData({
+      investments,
+      transactions,
+      goals,
+      money_records: moneyRecords,
+      preferences: { theme, currency, monthlyTarget: target }
+    }).catch(err => console.error('Failed to sync monthly target preference:', err));
   };
 
   const showToast = (message: string, type: 'success' | 'info' | 'warning' = 'info') => {
@@ -213,7 +363,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // CRUD for Investments (User additions set isDemo: false and default owner to Me)
-  const addInvestment = (inv: Omit<Investment, 'id'>) => {
+  const addInvestment = async (inv: Omit<Investment, 'id'>) => {
     const buyDate = inv.buyDate || inv.purchaseDate || new Date().toISOString().split('T')[0];
     const category = inv.category || inv.assetType || 'Stocks';
 
@@ -248,85 +398,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
-    setInvestments(prev => {
-      const next = [...prev, newInv];
-      storage.set('investments', next);
-      return next;
-    });
+    const nextInvs = [...investments, newInv];
+    const nextTxs = [...transactions, firstTx];
 
-    setTransactions(prev => {
-      const next = [...prev, firstTx];
-      storage.set('transactions', next);
-      return next;
-    });
-
-    showToast('Investment added successfully!', 'success');
+    const success = await syncWithCloud(nextInvs, nextTxs, goals, moneyRecords);
+    if (success) {
+      setInvestments(nextInvs);
+      setTransactions(nextTxs);
+      showToast('Investment added successfully!', 'success');
+    }
   };
 
-  const updateInvestment = (updated: Investment) => {
-    setInvestments(prev => {
-      const next = prev.map(inv => {
-        if (inv.id === updated.id) {
-          return {
-            ...inv,
-            ...updated,
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return inv;
-      });
-      storage.set('investments', next);
-      return next;
+  const updateInvestment = async (updated: Investment) => {
+    const nextInvs = investments.map(inv => {
+      if (inv.id === updated.id) {
+        return {
+          ...inv,
+          ...updated,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return inv;
     });
-    showToast('Investment updated successfully!', 'success');
+
+    const success = await syncWithCloud(nextInvs, transactions, goals, moneyRecords);
+    if (success) {
+      setInvestments(nextInvs);
+      showToast('Investment updated successfully!', 'success');
+    }
   };
 
-  const deleteInvestment = (id: string) => {
-    setInvestments(prev => {
-      const next = prev.filter(inv => inv.id !== id);
-      storage.set('investments', next);
-      return next;
-    });
-    setTransactions(prev => {
-      const next = prev.filter(tx => tx.investmentId !== id);
-      storage.set('transactions', next);
-      return next;
-    });
-    showToast('Investment removed successfully.', 'info');
+  const deleteInvestment = async (id: string) => {
+    const nextInvs = investments.filter(inv => inv.id !== id);
+    const nextTxs = transactions.filter(tx => tx.investmentId !== id);
+
+    const success = await syncWithCloud(nextInvs, nextTxs, goals, moneyRecords);
+    if (success) {
+      setInvestments(nextInvs);
+      setTransactions(nextTxs);
+      showToast('Investment removed successfully.', 'info');
+    }
   };
 
   // CRUD for Transactions
-  const addTransaction = (tx: Omit<Transaction, 'id' | 'createdAt'>) => {
+  const addTransaction = async (tx: Omit<Transaction, 'id' | 'createdAt'>) => {
     const newTx: Transaction = {
       ...tx,
       id: generateId(),
       createdAt: new Date().toISOString()
     };
-    setTransactions(prev => {
-      const next = [...prev, newTx];
-      storage.set('transactions', next);
-      return next;
-    });
+    const nextTxs = [...transactions, newTx];
+
+    const success = await syncWithCloud(investments, nextTxs, goals, moneyRecords);
+    if (success) {
+      setTransactions(nextTxs);
+      showToast('Transaction added successfully!', 'success');
+    }
   };
 
-  const deleteTransaction = (id: string) => {
-    setTransactions(prev => {
-      const next = prev.filter(t => t.id !== id);
-      storage.set('transactions', next);
-      return next;
-    });
+  const deleteTransaction = async (id: string) => {
+    const nextTxs = transactions.filter(t => t.id !== id);
+
+    const success = await syncWithCloud(investments, nextTxs, goals, moneyRecords);
+    if (success) {
+      setTransactions(nextTxs);
+      showToast('Transaction deleted successfully.', 'info');
+    }
   };
 
-  const updateTransaction = (updated: Transaction) => {
-    setTransactions(prev => {
-      const next = prev.map(t => t.id === updated.id ? updated : t);
-      storage.set('transactions', next);
-      return next;
-    });
+  const updateTransaction = async (updated: Transaction) => {
+    const nextTxs = transactions.map(t => t.id === updated.id ? updated : t);
+
+    const success = await syncWithCloud(investments, nextTxs, goals, moneyRecords);
+    if (success) {
+      setTransactions(nextTxs);
+      showToast('Transaction updated successfully!', 'success');
+    }
   };
 
   // CRUD for Goals (automatically set owner = "Me" and isDemo = false)
-  const addGoal = (goal: Omit<Goal, 'id'>) => {
+  const addGoal = async (goal: Omit<Goal, 'id'>) => {
     const newGoal: Goal = {
       ...goal,
       id: generateId(),
@@ -335,68 +486,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isCompleted: false,
       progressMode: goal.progressMode || 'Manual'
     };
-    setGoals(prev => {
-      const next = [...prev, newGoal];
-      storage.set('goals', next);
-      return next;
-    });
-    showToast('Financial goal created!', 'success');
+    const nextGoals = [...goals, newGoal];
+
+    const success = await syncWithCloud(investments, transactions, nextGoals, moneyRecords);
+    if (success) {
+      setGoals(nextGoals);
+      showToast('Financial goal created!', 'success');
+    }
   };
 
-  const updateGoal = (updated: Goal) => {
-    setGoals(prev => {
-      const next = prev.map(g => g.id === updated.id ? updated : g);
-      storage.set('goals', next);
-      return next;
-    });
-    showToast('Goal updated successfully!', 'success');
+  const updateGoal = async (updated: Goal) => {
+    const nextGoals = goals.map(g => g.id === updated.id ? updated : g);
+
+    const success = await syncWithCloud(investments, transactions, nextGoals, moneyRecords);
+    if (success) {
+      setGoals(nextGoals);
+      showToast('Goal updated successfully!', 'success');
+    }
   };
 
-  const deleteGoal = (id: string) => {
-    setGoals(prev => {
-      const next = prev.filter(g => g.id !== id);
-      storage.set('goals', next);
-      return next;
-    });
-    showToast('Goal deleted.', 'info');
+  const deleteGoal = async (id: string) => {
+    const nextGoals = goals.filter(g => g.id !== id);
+
+    const success = await syncWithCloud(investments, transactions, nextGoals, moneyRecords);
+    if (success) {
+      setGoals(nextGoals);
+      showToast('Goal deleted.', 'info');
+    }
   };
 
   // CRUD for Money Tracker Records
-  const addMoneyRecord = (payload: Omit<MoneyRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addMoneyRecord = async (payload: Omit<MoneyRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newRecord: MoneyRecord = {
       ...payload,
       id: 'mr_' + Math.random().toString(36).substring(2, 11),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    setMoneyRecords(prev => [newRecord, ...prev]);
-    showToast('Money record added successfully!', 'success');
+    const nextMoney = [newRecord, ...moneyRecords];
+
+    const success = await syncWithCloud(investments, transactions, goals, nextMoney);
+    if (success) {
+      setMoneyRecords(nextMoney);
+      showToast('Money record added successfully!', 'success');
+    }
   };
 
-  const updateMoneyRecord = (record: MoneyRecord) => {
-    setMoneyRecords(prev =>
-      prev.map(r => r.id === record.id ? { ...record, updatedAt: new Date().toISOString() } : r)
-    );
-    showToast('Money record updated successfully!', 'success');
+  const updateMoneyRecord = async (record: MoneyRecord) => {
+    const nextMoney = moneyRecords.map(r => r.id === record.id ? { ...record, updatedAt: new Date().toISOString() } : r);
+
+    const success = await syncWithCloud(investments, transactions, goals, nextMoney);
+    if (success) {
+      setMoneyRecords(nextMoney);
+      showToast('Money record updated successfully!', 'success');
+    }
   };
 
-  const deleteMoneyRecord = (id: string) => {
-    setMoneyRecords(prev => prev.filter(r => r.id !== id));
-    showToast('Money record deleted successfully!', 'success');
+  const deleteMoneyRecord = async (id: string) => {
+    const nextMoney = moneyRecords.filter(r => r.id !== id);
+
+    const success = await syncWithCloud(investments, transactions, goals, nextMoney);
+    if (success) {
+      setMoneyRecords(nextMoney);
+      showToast('Money record deleted successfully!', 'success');
+    }
   };
 
-  const markMoneyRecordReceived = (id: string) => {
-    setMoneyRecords(prev =>
-      prev.map(r => r.id === id ? {
-        ...r,
-        amountPaid: r.amount,
-        updatedAt: new Date().toISOString()
-      } : r)
-    );
-    showToast('Record marked as fully paid!', 'success');
+  const markMoneyRecordReceived = async (id: string) => {
+    const nextMoney = moneyRecords.map(r => r.id === id ? {
+      ...r,
+      amountPaid: r.amount,
+      updatedAt: new Date().toISOString()
+    } : r);
+
+    const success = await syncWithCloud(investments, transactions, goals, nextMoney);
+    if (success) {
+      setMoneyRecords(nextMoney);
+      showToast('Record marked as fully paid!', 'success');
+    }
   };
 
-  // Load Demo Investments Data
+  // Load Demo Investments Data (State-only)
   const loadDemoData = () => {
     if (window.confirm('Load sample investment data for testing?')) {
       const demoWithFlags = DEFAULT_INVESTMENTS.map(inv => {
@@ -493,24 +663,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setInvestments(prev => {
         const withoutDemo = prev.filter(inv => !inv.isDemo);
-        const next = [...withoutDemo, ...demoWithFlags];
-        storage.set('investments', next);
-        return next;
+        return [...withoutDemo, ...demoWithFlags];
       });
 
       setTransactions(prev => {
         const withoutDemo = prev.filter(tx => !tx.isDemo);
-        const next = [...withoutDemo, ...demoTxs];
-        storage.set('transactions', next);
-        return next;
+        return [...withoutDemo, ...demoTxs];
       });
 
       setMoneyRecords(prev => {
         const withoutDemo = prev.filter(r => !r.isDemo);
-        const next = [...withoutDemo, ...demoMoneyRecords];
-        storage.set('moneyTracker', next);
-        storage.set('money_records', next);
-        return next;
+        return [...withoutDemo, ...demoMoneyRecords];
       });
 
       // Force filter to All so loaded demo data is immediately displayed
@@ -520,31 +683,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Clear Demo Investments Data
+  // Clear Demo Investments Data (State-only)
   const clearDemoData = () => {
-    setInvestments(prev => {
-      const next = prev.filter(inv => !inv.isDemo);
-      storage.set('investments', next);
-      return next;
-    });
-    setTransactions(prev => {
-      const next = prev.filter(tx => !tx.isDemo);
-      storage.set('transactions', next);
-      return next;
-    });
-    setMoneyRecords(prev => {
-      const next = prev.filter(r => !r.isDemo);
-      storage.set('moneyTracker', next);
-      storage.set('money_records', next);
-      return next;
-    });
+    setInvestments(prev => prev.filter(inv => !inv.isDemo));
+    setTransactions(prev => prev.filter(tx => !tx.isDemo));
+    setMoneyRecords(prev => prev.filter(r => !r.isDemo));
     setDataTypeFilter('Real'); // Toggle filter back to Real Data
     showToast('Demo dataset cleared.', 'info');
   };
 
   const hasDemoData = investments.some(inv => inv.isDemo);
 
-  // Load Demo Goals
+  // Load Demo Goals (State-only)
   const loadDemoGoals = () => {
     if (window.confirm('Load sample financial goals for testing?')) {
       const demoGoalsWithFlags = DEFAULT_GOALS.map(g => ({
@@ -555,9 +705,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
       setGoals(prev => {
         const withoutDemo = prev.filter(g => !g.isDemo);
-        const next = [...withoutDemo, ...demoGoalsWithFlags];
-        storage.set('goals', next);
-        return next;
+        return [...withoutDemo, ...demoGoalsWithFlags];
       });
       // Force filter to All so loaded demo data is immediately displayed
       setDataTypeFilter('All');
@@ -566,32 +714,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Clear Demo Goals
+  // Clear Demo Goals (State-only)
   const clearDemoGoals = () => {
-    setGoals(prev => {
-      const next = prev.filter(g => !g.isDemo);
-      storage.set('goals', next);
-      return next;
-    });
+    setGoals(prev => prev.filter(g => !g.isDemo));
     setDataTypeFilter('Real'); // Toggle filter back to Real Data
     showToast('Demo goals cleared.', 'info');
   };
 
   const hasDemoGoals = goals.some(g => g.isDemo);
 
-  // Clear Database
-  const clearAllData = () => {
-    setInvestments([]);
-    setTransactions([]);
-    setGoals([]);
-    setMoneyRecords([]);
-    storage.remove('investments');
-    storage.remove('transactions');
-    storage.remove('goals');
-    storage.remove('money_records');
-    storage.remove('moneyTracker');
-    showToast('All locally stored data deleted.', 'warning');
-    navigateTo('dashboard');
+  // Clear Database (Syncs empty state to Supabase)
+  const clearAllData = async () => {
+    if (window.confirm('Wipe all cloud and local data permanently?')) {
+      const success = await syncWithCloud([], [], [], []);
+      if (success) {
+        setInvestments([]);
+        setTransactions([]);
+        setGoals([]);
+        setMoneyRecords([]);
+        
+        // Remove backups/caches
+        storage.remove('investments');
+        storage.remove('transactions');
+        storage.remove('goals');
+        storage.remove('money_records');
+        storage.remove('moneyTracker');
+        
+        showToast('All database and local data deleted.', 'warning');
+        navigateTo('dashboard');
+      }
+    }
   };
 
   // Backup - Export Data as JSON
@@ -622,7 +774,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Backup - Import Data from JSON (Validates structure before applying)
+  // Backup - Import Data from JSON (Syncs imported real records to Supabase)
   const importData = (jsonStr: string): boolean => {
     try {
       const parsed = JSON.parse(jsonStr);
@@ -641,35 +793,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const newGoals = parsed.goals || [];
         const newMoneyRecords = migrateMoneyRecords(parsed.moneyRecords || []);
 
-        setInvestments(newInvs);
-        setTransactions(newTxs);
-        setGoals(newGoals);
-        setMoneyRecords(newMoneyRecords);
+        syncWithCloud(newInvs, newTxs, newGoals, newMoneyRecords).then(success => {
+          if (success) {
+            setInvestments(newInvs);
+            setTransactions(newTxs);
+            setGoals(newGoals);
+            setMoneyRecords(newMoneyRecords);
 
-        storage.set('investments', newInvs);
-        storage.set('transactions', newTxs);
-        storage.set('goals', newGoals);
-        storage.set('money_records', newMoneyRecords);
-        storage.set('moneyTracker', newMoneyRecords);
+            if (parsed.preferences) {
+              const prefs = parsed.preferences;
+              if (prefs.theme) {
+                setTheme(prefs.theme);
+                storage.set('theme_pref', prefs.theme);
+              }
+              if (prefs.currency) {
+                setCurrencyState(prefs.currency);
+                storage.set('currency_pref', prefs.currency);
+              }
+              if (prefs.monthlyTarget) {
+                setMonthlyTargetState(prefs.monthlyTarget);
+                storage.set('monthly_target_pref', prefs.monthlyTarget);
+              }
+            }
 
-        if (parsed.preferences) {
-          const prefs = parsed.preferences;
-          if (prefs.theme) {
-            setTheme(prefs.theme);
-            storage.set('theme_pref', prefs.theme);
+            showToast('Backup restored and cloud synced successfully!', 'success');
+            navigateTo('dashboard');
+          } else {
+            showToast('Restore aborted: cloud synchronization failed.', 'warning');
           }
-          if (prefs.currency) {
-            setCurrencyState(prefs.currency);
-            storage.set('currency_pref', prefs.currency);
-          }
-          if (prefs.monthlyTarget) {
-            setMonthlyTargetState(prefs.monthlyTarget);
-            storage.set('monthly_target_pref', prefs.monthlyTarget);
-          }
-        }
+        }).catch(err => {
+          console.error(err);
+          showToast('Error syncing restored data to cloud.', 'warning');
+        });
 
-        showToast('Backup restored successfully!', 'success');
-        navigateTo('dashboard');
         return true;
       }
       showToast('Invalid backup file format.', 'warning');
@@ -716,7 +872,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [investments, dataTypeFilter, isRefreshingPrices]);
 
-// eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     refreshMarketPrices();
 
@@ -739,7 +895,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [refreshMarketPrices]);
 
-  // Deprecated resetting
+  // Deprecated resetting - clears real records from cloud, initializes local demo
   const resetData = () => {
     if (window.confirm('Reset all values to system default demo data?')) {
       const demoWithFlags = DEFAULT_INVESTMENTS.map(inv => ({
@@ -760,17 +916,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         progressMode: 'Manual' as const
       }));
 
-      setInvestments(demoWithFlags);
-      setGoals(demoGoalsWithFlags);
-      setMoneyRecords([]);
+      syncWithCloud([], [], [], []).then(success => {
+        if (success) {
+          setInvestments(demoWithFlags);
+          setGoals(demoGoalsWithFlags);
+          setMoneyRecords([]);
 
-      storage.set('investments', demoWithFlags);
-      storage.set('goals', demoGoalsWithFlags);
-      storage.set('money_records', []);
-      storage.set('moneyTracker', []);
+          storage.set('investments', demoWithFlags);
+          storage.set('goals', demoGoalsWithFlags);
+          storage.set('money_records', []);
+          storage.set('moneyTracker', []);
 
-      showToast('Workspace reset to defaults.', 'info');
-      navigateTo('dashboard');
+          showToast('Workspace reset to defaults.', 'info');
+          navigateTo('dashboard');
+        }
+      });
     }
   };
 
@@ -848,6 +1008,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         marketPrices,
         refreshMarketPrices,
         isRefreshingPrices,
+        isCloudDataLoading,
+        lastSyncedAt,
+        migrateLocalData,
+        isSyncing
       }}
     >
       {children}
