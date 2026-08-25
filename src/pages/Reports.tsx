@@ -18,12 +18,50 @@ import {
 } from 'recharts';
 import {
   TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
   Filter
 } from 'lucide-react';
 
 type DateFilterType = 'this-month' | '3-months' | '6-months' | '1-year' | 'all-time' | 'custom';
+
+const normalizeAssetClass = (category: string | undefined): string => {
+  if (!category) return 'Others';
+  const clean = category.trim().toLowerCase();
+  
+  if (clean === 'stock' || clean === 'stocks') {
+    return 'Stocks';
+  }
+  if (clean === 'etf' || clean === 'etfs') {
+    return 'ETFs';
+  }
+  if (clean === 'mutual fund' || clean === 'mutual funds') {
+    return 'Mutual Funds';
+  }
+  if (clean === 'fixed deposit' || clean === 'fixed deposits') {
+    return 'Fixed Deposits';
+  }
+  if (clean === 'gold' || clean === 'digital gold') {
+    return 'Gold';
+  }
+  if (clean === 'silver' || clean === 'digital silver') {
+    return 'Silver';
+  }
+  if (clean === 'platinum' || clean === 'digital platinum') {
+    return 'Platinum';
+  }
+  if (clean === 'savings/cash' || clean === 'savings' || clean === 'cash') {
+    return 'Savings/Cash';
+  }
+  if (clean === 'ipo' || clean === 'ipos') {
+    return 'IPOs';
+  }
+  if (clean === 'crypto' || clean === 'cryptocurrency') {
+    return 'Crypto';
+  }
+  if (clean === 'bond' || clean === 'bonds') {
+    return 'Bonds';
+  }
+  return 'Others';
+};
 
 export const Reports: React.FC = () => {
   const { formatCurrency } = useApp();
@@ -42,49 +80,40 @@ export const Reports: React.FC = () => {
 
   const {
     totalInvested,
-    totalCurrent,
-    unrealizedPL,
-    realizedPL,
-    totalPL,
-    overallReturnPercentage
+    totalCurrent
   } = portfolioTotal;
 
-  const isProfit = totalPL >= 0;
 
-  const assetPerformances = holdings
-    .map(h => ({
-      id: h.id,
-      name: h.assetName,
-      type: h.category || h.assetType,
-      invested: h.investedAmount ?? 0,
-      current: h.currentValue ?? 0,
-      profitLoss: h.profitLoss ?? 0,
-      returnPercent: h.returnPercent ?? 0
-    }))
-    .filter(item => item.invested > 0);
-
-  // Sort performers
-  const bestPerformer = assetPerformances.length > 0
-    ? [...assetPerformances].sort((a, b) => (b.returnPercent ?? 0) - (a.returnPercent ?? 0))[0]
-    : null;
-
-  const worstPerformer = assetPerformances.length > 0
-    ? [...assetPerformances].sort((a, b) => (a.returnPercent ?? 0) - (b.returnPercent ?? 0))[0]
-    : null;
 
   // Chart 1: Donut Asset Allocation (current value weights)
-  const allocationMap = holdings.reduce((acc, h) => {
-    const cat = h.category || h.assetType;
-    acc[cat] = (acc[cat] || 0) + (h.currentValue ?? 0);
-    return acc;
-  }, {} as Record<string, number>);
+  const allocationMap: Record<string, number> = {};
+  holdings.forEach(h => {
+    if (h.category === 'IPOs' || h.assetType === 'IPOs') {
+      const status = h.ipoAllotmentStatus || 'Applied';
+      const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
+      if (!isAllotted) return;
+    }
+
+    const cat = normalizeAssetClass(h.category || h.assetType);
+    const val = h.currentValue ?? h.investedAmount ?? 0;
+    if (val > 0) {
+      allocationMap[cat] = (allocationMap[cat] || 0) + val;
+    }
+  });
+
+  const totalAllocationValue = Object.values(allocationMap).reduce((sum, v) => sum + v, 0);
 
   const pieData = Object.entries(allocationMap)
-    .map(([name, value]) => ({
-      name,
-      value: Math.round(value * 100) / 100
-    }))
-    .filter(item => item.value > 0);
+    .map(([name, value]) => {
+      const pct = totalAllocationValue > 0 ? (value / totalAllocationValue) * 100 : 0;
+      return {
+        name,
+        value: Math.round(value * 100) / 100,
+        percentage: pct
+      };
+    })
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value);
 
   const ASSET_COLORS: Record<string, string> = {
     'Stocks': '#6366f1',
@@ -96,6 +125,9 @@ export const Reports: React.FC = () => {
     'Platinum': '#94a3b8',
     'IPOs': '#f43f5e',
     'Savings/Cash': '#ec4899',
+    'Crypto': '#f97316',
+    'Bonds': '#3b82f6',
+    'Others': '#838896',
   };
   const DEFAULT_COLOR = '#838896';
 
@@ -138,22 +170,7 @@ export const Reports: React.FC = () => {
       amount: Math.round(item.amount * 100) / 100
     }));
 
-  // Chart 3: Profit/Loss by Asset Class
-  const plMap = holdings.reduce((acc, h) => {
-    if (h.category === 'IPOs') {
-      const status = h.ipoAllotmentStatus || 'Applied';
-      const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
-      if (!isAllotted) return acc;
-    }
-    const cat = h.category || h.assetType;
-    acc[cat] = (acc[cat] || 0) + h.totalPL;
-    return acc;
-  }, {} as Record<string, number>);
 
-  const plChartData = Object.entries(plMap).map(([name, value]) => ({
-    name,
-    value: Math.round(value * 100) / 100
-  }));
 
   // Chart 4: Cumulative value over time
   // Sort transactions chronologically
@@ -208,11 +225,12 @@ export const Reports: React.FC = () => {
   // Custom tooltips
   const CustomPieTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const { name, value, percentage } = payload[0].payload;
       return (
         <div className="bg-white dark:bg-[#0d0f17] border border-slate-205 dark:border-slate-800 p-3 rounded-xl shadow-xl">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{payload[0].name}</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{name}</p>
           <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-            {formatCurrency(payload[0].value)}
+            {formatCurrency(value)} <span className="text-xs font-semibold text-slate-405 dark:text-slate-500 ml-1">({percentage.toFixed(1)}%)</span>
           </p>
         </div>
       );
@@ -234,20 +252,7 @@ export const Reports: React.FC = () => {
     return null;
   };
 
-  const CustomPLTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const val = payload[0].value;
-      return (
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-205 dark:border-slate-800 p-3 rounded-xl shadow-xl">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{payload[0].payload.name}</p>
-          <p className={`text-sm font-extrabold mt-1 ${val >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {val >= 0 ? '+' : ''}{formatCurrency(val)}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+
 
   const CustomLineTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -341,95 +346,32 @@ export const Reports: React.FC = () => {
       )}
 
       {/* Overall Performance Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-        {/* Core metrics summary */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between md:col-span-2">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Portfolio Valuation Summary</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-semibold">
-            <div>
-              <span className="block text-[9px] uppercase tracking-wider text-slate-400">Total Capital Invested</span>
-              <span className="text-lg font-extrabold text-slate-900 dark:text-white mt-1 block">
-                {formatCurrency(totalInvested)}
-              </span>
-            </div>
-            <div>
-              <span className="block text-[9px] uppercase tracking-wider text-slate-400">Current Valuation</span>
-              <span className="text-lg font-extrabold text-slate-900 dark:text-white mt-1 block">
-                {formatCurrency(totalCurrent)}
-              </span>
-            </div>
-            <div>
-              <span className="block text-[9px] uppercase tracking-wider text-slate-400">Return Percentage</span>
-              <span className={`text-lg font-extrabold mt-1 block ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {isProfit ? '+' : ''}{overallReturnPercentage.toFixed(2)}%
-              </span>
-            </div>
-            <div>
-              <span className="block text-[9px] uppercase tracking-wider text-slate-400">Unrealized P/L</span>
-              <span className={`text-md font-bold mt-1 block ${unrealizedPL >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {unrealizedPL >= 0 ? '+' : ''}{formatCurrency(unrealizedPL)}
-              </span>
-            </div>
-            <div>
-              <span className="block text-[9px] uppercase tracking-wider text-slate-400">Realized P/L (Sales)</span>
-              <span className={`text-md font-bold mt-1 block ${realizedPL >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {realizedPL >= 0 ? '+' : ''}{formatCurrency(realizedPL)}
-              </span>
-            </div>
-            <div>
-              <span className="block text-[9px] uppercase tracking-wider text-slate-400">Combined Net Earnings</span>
-              <span className={`text-md font-extrabold mt-1 block ${totalPL >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {totalPL >= 0 ? '+' : ''}{formatCurrency(totalPL)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Performers Card widget */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Total Capital Invested */}
         <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Performers Spotlight</h3>
-          <div className="space-y-4 text-xs font-semibold">
-            {bestPerformer ? (
-              <div className="flex items-center justify-between border-b border-slate-50 dark:border-slate-850 pb-3">
-                <div className="space-y-1">
-                  <span className="block text-[8px] uppercase tracking-widest text-slate-400">Top Performer</span>
-                  <span className="text-slate-900 dark:text-white font-bold block">{bestPerformer.name}</span>
-                  <span className="text-[9px] text-slate-450 uppercase">{bestPerformer.type}</span>
-                </div>
-                <div className="text-right text-emerald-500 font-extrabold text-sm">
-                  <div className="flex items-center justify-end gap-0.5">
-                    <ArrowUpRight className="h-4 w-4" />
-                    <span>+{bestPerformer.returnPercent.toFixed(1)}%</span>
-                  </div>
-                  <span className="text-[10px] block font-semibold mt-0.5">+{formatCurrency(bestPerformer.profitLoss)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-slate-400 py-3">No asset performance stats.</div>
-            )}
-
-            {worstPerformer ? (
-              <div className="flex items-center justify-between pt-1">
-                <div className="space-y-1">
-                  <span className="block text-[8px] uppercase tracking-widest text-slate-400">Underperformer</span>
-                  <span className="text-slate-900 dark:text-white font-bold block">{worstPerformer.name}</span>
-                  <span className="text-[9px] text-slate-450 uppercase">{worstPerformer.type}</span>
-                </div>
-                <div className="text-right text-rose-500 font-extrabold text-sm">
-                  <div className="flex items-center justify-end gap-0.5">
-                    <ArrowDownRight className="h-4 w-4" />
-                    <span>{worstPerformer.returnPercent.toFixed(1)}%</span>
-                  </div>
-                  <span className="text-[10px] block font-semibold mt-0.5">{formatCurrency(worstPerformer.profitLoss)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-slate-400 py-3">No underperforming data.</div>
-            )}
+          <div>
+            <span className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Capital Invested</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2 block">
+              {formatCurrency(totalInvested)}
+            </span>
           </div>
+          <p className="text-xs text-slate-400 dark:text-slate-550 mt-4 m-0 font-semibold">
+            Total principal amount allocated across active investments.
+          </p>
         </div>
 
+        {/* Current Valuation */}
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <span className="block text-[10px] uppercase font-bold tracking-wider text-slate-400">Current Valuation</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2 block">
+              {formatCurrency(totalCurrent)}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-550 mt-4 m-0 font-semibold">
+            Real-time market value of current investment portfolio.
+          </p>
+        </div>
       </div>
 
       {/* Main Charts Row */}
@@ -471,14 +413,19 @@ export const Reports: React.FC = () => {
           </div>
 
           {/* Color Legend */}
-          <div className="grid grid-cols-3 gap-2 text-xs border-t border-slate-50 dark:border-slate-850 pt-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs border-t border-slate-50 dark:border-slate-850 pt-3">
             {pieData.map(entry => (
-              <div key={entry.name} className="flex items-center gap-1.5 font-semibold text-slate-500 dark:text-slate-400">
-                <span
-                  className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: ASSET_COLORS[entry.name] || DEFAULT_COLOR }}
-                />
-                <span className="truncate">{entry.name}</span>
+              <div key={entry.name} className="flex items-center justify-between font-semibold text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: ASSET_COLORS[entry.name] || DEFAULT_COLOR }}
+                  />
+                  <span className="truncate">{entry.name}</span>
+                </div>
+                <span className="text-slate-405 dark:text-slate-500 ml-1 font-bold text-[10px]">
+                  {entry.percentage.toFixed(1)}%
+                </span>
               </div>
             ))}
           </div>
@@ -510,17 +457,15 @@ export const Reports: React.FC = () => {
 
       </div>
 
-      {/* Cumulative Performance Line Chart & Profit/Loss chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Cumulative performance over time */}
+      {/* Portfolio Growth Curve Full Width */}
+      <div className="w-full">
         <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white m-0">Portfolio Growth Curve</h3>
             <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5">Valuation progression comparing capital cost vs current market size.</p>
           </div>
 
-          <div className="h-64 w-full my-4">
+          <div className="h-72 w-full my-4">
             {lineChartData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-555">Add holdings or demo data to view line chart curve.</div>
             ) : (
@@ -537,38 +482,6 @@ export const Reports: React.FC = () => {
             )}
           </div>
         </div>
-
-        {/* Profit/Loss by asset category */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white m-0">Profit & Loss by Category</h3>
-            <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5">Asset class level net earnings (Realized + Unrealized).</p>
-          </div>
-
-          <div className="h-64 w-full my-4">
-            {plChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">No profit logs available to graph.</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={plChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2230" opacity={0.1} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <Tooltip content={<CustomPLTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }} />
-                  <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28}>
-                    {plChartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.value >= 0 ? '#10b981' : '#f43f5e'}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
       </div>
 
       {/* Transaction Activity Summary Table */}
