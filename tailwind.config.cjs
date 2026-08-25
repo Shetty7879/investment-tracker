@@ -10,6 +10,10 @@ module.exports = {
         'bg-card': 'var(--bg-card)',
         'text-primary': 'var(--text-primary)',
         'text-muted': 'var(--text-muted)',
+        'indigo-650': '#6C5CE7',
+        'amber-650': '#d97706',
+        'red-650': '#e02424',
+        'red-655': '#c81e1e',
       },
       animation: {
         fadeScaleIn: 'fadeScaleIn 0.3s ease-out forwards',

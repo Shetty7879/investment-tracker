@@ -168,10 +168,10 @@ export const Investments: React.FC = () => {
                   <button
                     key={opt.value}
                     onClick={() => setTypeFilter(opt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
                       typeFilter === opt.value
-                        ? 'bg-indigo-500/10 text-indigo-655 dark:text-indigo-400 border border-indigo-500/20 shadow-sm'
-                        : 'border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-indigo-50/40 dark:hover:bg-slate-800/50 hover:text-indigo-650 dark:hover:text-indigo-400'
                     }`}
                   >
                     {opt.label}
@@ -212,10 +212,10 @@ export const Investments: React.FC = () => {
                     <th className="px-6 py-4">Investment Name</th>
                     <th className="px-4 py-4">Type</th>
                     <th className="px-4 py-4">Broker / Platform</th>
-                    <th className="px-4 py-4 text-right">Quantity</th>
-                    <th className="px-4 py-4 text-right">Buy Price</th>
+                    <th className="px-4 py-4 text-right">Qty / Lots</th>
+                    <th className="px-4 py-4 text-right">Price</th>
                     <th className="px-4 py-4 text-right">Invested Amount</th>
-                    <th className="px-4 py-4 text-center">Buy Date</th>
+                    <th className="px-4 py-4 text-center">Status / Date</th>
                     <th className="px-6 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -228,72 +228,123 @@ export const Investments: React.FC = () => {
                     </tr>
                   ) : (
                     sortedInvestments.map(inv => {
+                      const isIPORow = inv.category === 'IPOs' || inv.assetType === 'IPOs';
                       const displayType = inv.category === 'Other' && inv.customAssetType
                         ? inv.customAssetType
                         : REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
-                      const broker = inv.broker === 'Other' && inv.customBroker
+                      const brokerLabel = inv.broker === 'Other' && inv.customBroker
                         ? inv.customBroker
                         : inv.broker || 'Other';
+
+                      // IPO-specific derived values
+                      const ipoStatus = inv.allotmentStatus || (inv.ipoAllotmentStatus as string) || 'Applied';
+                      const ipoAppliedLots = inv.appliedLots ?? inv.ipoLotsApplied ?? 0;
+                      const ipoSharesPerLot = inv.sharesPerLot ?? 0;
+                      const ipoIssuePrice = inv.issuePrice ?? inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+                      const ipoAllottedLots = inv.allottedLots ?? 0;
+                      const ipoInvested = ipoStatus === 'Allotted' && ipoAllottedLots > 0 && ipoSharesPerLot > 0
+                        ? ipoAllottedLots * ipoSharesPerLot * ipoIssuePrice
+                        : 0;
+
+                      const ipoStatusColors: Record<string, string> = {
+                        'Applied': 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                        'Allotted': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                        'Not Allotted': 'bg-red-500/10 text-red-600 dark:text-red-400',
+                        'Withdrawn': 'bg-slate-500/10 text-slate-500 dark:text-slate-400',
+                      };
+
                       return (
                         <tr
                           key={inv.id}
                           className="hover:bg-slate-50/50 dark:hover:bg-slate-800/15 transition-colors"
                         >
+                          {/* Name */}
                           <td className="px-6 py-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <span>{inv.assetName}</span>
-                              {inv.isDemo && (
-                                <span className="text-[9px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">
-                                  DEMO
-                                </span>
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span>{inv.assetName}</span>
+                                {inv.isDemo && (
+                                  <span className="text-[9px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">DEMO</span>
+                                )}
+                              </div>
+                              {isIPORow && inv.companyName && (
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{inv.companyName}</span>
                               )}
                             </div>
                           </td>
 
+                          {/* Type */}
                           <td className="px-4 py-4 whitespace-nowrap">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${getAssetTypeBadgeStyle(displayType)}`}>
                               {displayType}
                             </span>
                           </td>
 
+                          {/* Broker */}
                           <td className="px-4 py-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${getBrokerBadgeStyle(broker)}`}>
-                              {broker}
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${getBrokerBadgeStyle(brokerLabel)}`}>
+                              {brokerLabel}
                             </span>
                           </td>
 
+                          {/* Qty / Lots */}
                           <td className="px-4 py-4 text-right text-slate-700 dark:text-slate-300 whitespace-nowrap font-bold">
-                            {inv.quantity}
+                            {isIPORow
+                              ? <span>{ipoAppliedLots} lot{ipoAppliedLots !== 1 ? 's' : ''}{ipoSharesPerLot > 0 ? ` × ${ipoSharesPerLot}` : ''}</span>
+                              : inv.quantity
+                            }
                           </td>
 
+                          {/* Price */}
                           <td className="px-4 py-4 text-right text-slate-700 dark:text-slate-300 whitespace-nowrap font-bold">
-                            {formatCurrency(inv.buyPrice ?? 0)}
+                            {formatCurrency(isIPORow ? ipoIssuePrice : (inv.buyPrice ?? 0))}
                           </td>
 
-                          <td className="px-4 py-4 text-right font-extrabold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                            {formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}
+                          {/* Invested Amount */}
+                          <td className="px-4 py-4 text-right font-extrabold whitespace-nowrap">
+                            {isIPORow ? (
+                              ipoStatus === 'Allotted' ? (
+                                <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency(ipoInvested)}</span>
+                              ) : (
+                                <span className="text-slate-400 dark:text-slate-600 font-semibold italic text-[10px]">Not counted</span>
+                              )
+                            ) : (
+                              <span className="text-indigo-600 dark:text-indigo-400">{formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}</span>
+                            )}
                           </td>
 
-                          <td className="px-4 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                            {inv.buyDate || inv.purchaseDate || '—'}
+                          {/* Status / Date */}
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            {isIPORow ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${ipoStatusColors[ipoStatus] || 'bg-slate-500/10 text-slate-500'}`}>
+                                  {ipoStatus}
+                                </span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                  {inv.applicationDate || inv.buyDate || '—'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                {inv.buyDate || inv.purchaseDate || '—'}
+                              </span>
+                            )}
                           </td>
 
+                          {/* Actions */}
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center justify-center gap-3">
-                              {/* Edit details */}
                               <button
                                 onClick={() => handleEdit(inv)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-650 hover:bg-indigo-500/5 dark:hover:text-indigo-400 dark:hover:bg-indigo-500/10 transition-all cursor-pointer"
-                                title="Edit Asset Info"
+                                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
+                                title="Edit"
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
-
-                              {/* Delete holding */}
                               <button
                                 onClick={() => handleDelete(inv.id)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-505 hover:bg-red-500/5 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all cursor-pointer"
-                                title="Delete Investment"
+                                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-red-650 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
+                                title="Delete"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -316,12 +367,30 @@ export const Investments: React.FC = () => {
               </div>
             ) : (
               sortedInvestments.map(inv => {
+                const isIPORow = inv.category === 'IPOs' || inv.assetType === 'IPOs';
                 const displayType = inv.category === 'Other' && inv.customAssetType
                   ? inv.customAssetType
                   : REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
-                const broker = inv.broker === 'Other' && inv.customBroker
+                const brokerLabel = inv.broker === 'Other' && inv.customBroker
                   ? inv.customBroker
                   : inv.broker || 'Other';
+
+                const ipoStatus = inv.allotmentStatus || (inv.ipoAllotmentStatus as string) || 'Applied';
+                const ipoAppliedLots = inv.appliedLots ?? inv.ipoLotsApplied ?? 0;
+                const ipoSharesPerLot = inv.sharesPerLot ?? 0;
+                const ipoIssuePrice = inv.issuePrice ?? inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+                const ipoAllottedLots = inv.allottedLots ?? 0;
+                const ipoInvested = ipoStatus === 'Allotted' && ipoAllottedLots > 0 && ipoSharesPerLot > 0
+                  ? ipoAllottedLots * ipoSharesPerLot * ipoIssuePrice
+                  : 0;
+
+                const ipoStatusColors: Record<string, string> = {
+                  'Applied': 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+                  'Allotted': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+                  'Not Allotted': 'bg-red-500/10 text-red-600 dark:text-red-400',
+                  'Withdrawn': 'bg-slate-500/10 text-slate-500 dark:text-slate-400',
+                };
+
                 return (
                   <div
                     key={inv.id}
@@ -332,54 +401,87 @@ export const Investments: React.FC = () => {
                         <h4 className="text-sm font-extrabold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
                           {inv.assetName}
                           {inv.isDemo && (
-                            <span className="text-[8px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">
-                              DEMO
-                            </span>
+                            <span className="text-[8px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">DEMO</span>
                           )}
                         </h4>
+                        {isIPORow && inv.companyName && (
+                          <p className="m-0 text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{inv.companyName}</p>
+                        )}
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getAssetTypeBadgeStyle(displayType)}`}>
                             {displayType}
                           </span>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getBrokerBadgeStyle(broker)}`}>
-                            {broker}
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getBrokerBadgeStyle(brokerLabel)}`}>
+                            {brokerLabel}
                           </span>
+                          {isIPORow && (
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${ipoStatusColors[ipoStatus] || 'bg-slate-500/10 text-slate-500'}` }>
+                              {ipoStatus}
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex gap-1.5">
-                        <button
-                          onClick={() => handleEdit(inv)}
-                          className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-indigo-650 hover:bg-indigo-500/5 dark:hover:text-indigo-400 transition-all cursor-pointer"
-                        >
+                        <button onClick={() => handleEdit(inv)} className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(inv.id)}
-                          className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-500/5 dark:hover:text-red-400 transition-all cursor-pointer"
-                        >
+                        <button onClick={() => handleDelete(inv.id)} className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-red-650 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3.5 border-t border-slate-100 dark:border-slate-850 pt-3.5">
-                      <div>
-                        <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Quantity / Units</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white">{inv.quantity}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Buy Price / Price per Unit</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(inv.buyPrice ?? 0)}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Invested Amount</span>
-                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider mb-0.5">Buy Date</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white">{inv.buyDate || inv.purchaseDate || '—'}</span>
-                      </div>
+                      {isIPORow ? (
+                        <>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">📦 Applied Lots</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{ipoAppliedLots} lot{ipoAppliedLots !== 1 ? 's' : ''}{ipoSharesPerLot > 0 ? ` × ${ipoSharesPerLot} shares` : ''}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">💰 Issue Price</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(ipoIssuePrice)}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Invested Amount</span>
+                            {ipoStatus === 'Allotted' ? (
+                              <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency(ipoInvested)}</span>
+                            ) : (
+                              <span className="font-semibold text-slate-400 italic">Not counted</span>
+                            )}
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider mb-0.5">📅 Application Date</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{inv.applicationDate || inv.buyDate || '—'}</span>
+                          </div>
+                          {ipoStatus === 'Allotted' && ipoAllottedLots > 0 && (
+                            <div className="col-span-2">
+                              <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">🎟️ Allotted Lots</span>
+                              <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{ipoAllottedLots} lot{ipoAllottedLots !== 1 ? 's' : ''}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Quantity / Units</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{inv.quantity}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Buy Price / Price per Unit</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(inv.buyPrice ?? 0)}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">Invested Amount</span>
+                            <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency((inv.quantity ?? 0) * (inv.buyPrice ?? 0))}</span>
+                          </div>
+                          <div>
+                            <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider mb-0.5">Buy Date</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white">{inv.buyDate || inv.purchaseDate || '—'}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {inv.notes && (

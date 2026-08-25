@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Moon, Sun, RotateCcw, ShieldAlert, Download, Upload, Trash2, Target, Settings as SettingsIcon } from 'lucide-react';
+import { Moon, Sun, ShieldAlert, Download, Upload, Trash2, Settings as SettingsIcon } from 'lucide-react';
 
 export const Settings: React.FC = () => {
   const {
@@ -10,12 +10,6 @@ export const Settings: React.FC = () => {
     setCurrency,
     monthlyTarget,
     setMonthlyTarget,
-    loadDemoData,
-    clearDemoData,
-    hasDemoData,
-    loadDemoGoals,
-    clearDemoGoals,
-    hasDemoGoals,
     clearAllData,
     exportData,
     importData,
@@ -122,10 +116,10 @@ export const Settings: React.FC = () => {
                 <button
                   key={curr.code}
                   onClick={() => setCurrency(curr.code)}
-                  className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all ${
+                  className={`flex items-center gap-3 p-4 rounded-xl border text-left transition-all cursor-pointer ${
                     isSelected
-                      ? 'border-indigo-500 bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 font-semibold shadow-sm'
-                      : 'border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-600 dark:text-slate-400'
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 font-semibold shadow-sm'
+                      : 'border-slate-200 dark:border-slate-800 bg-transparent hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 text-slate-600 dark:text-slate-400'
                   }`}
                 >
                   <span className="text-lg font-bold select-none h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-800 dark:text-slate-200 flex-shrink-0">
@@ -186,62 +180,10 @@ export const Settings: React.FC = () => {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Load demo investments */}
-            <button
-              onClick={loadDemoData}
-              className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-left transition-all cursor-pointer"
-            >
-              <div>
-                <span className="block text-sm font-bold text-slate-800 dark:text-slate-200">Load Mock Portfolio</span>
-                <span className="block text-xs text-slate-400 dark:text-slate-550 mt-0.5">Populate demo investments</span>
-              </div>
-              <RotateCcw className="h-5 w-5 text-indigo-500 flex-shrink-0" />
-            </button>
-
-            {/* Load demo goals */}
-            <button
-              onClick={loadDemoGoals}
-              className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-left transition-all cursor-pointer"
-            >
-              <div>
-                <span className="block text-sm font-bold text-slate-800 dark:text-slate-200">Load Demo Goals</span>
-                <span className="block text-xs text-slate-400 dark:text-slate-550 mt-0.5">Populate sample milestone goals</span>
-              </div>
-              <Target className="h-5 w-5 text-purple-500 flex-shrink-0" />
-            </button>
-
-            {/* Clear Demo Investments */}
-            {hasDemoData && (
-              <button
-                onClick={clearDemoData}
-                className="flex items-center justify-between p-4 rounded-xl border border-amber-500/10 hover:border-amber-500/30 bg-amber-505/5 hover:bg-amber-500/10 text-left transition-all cursor-pointer"
-              >
-                <div>
-                  <span className="block text-sm font-bold text-amber-650 dark:text-amber-400">Clear Demo Investments</span>
-                  <span className="block text-xs text-slate-405 dark:text-slate-500 mt-0.5">Remove preloaded investments</span>
-                </div>
-                <Trash2 className="h-5 w-5 text-amber-500 flex-shrink-0" />
-              </button>
-            )}
-
-            {/* Clear Demo Goals */}
-            {hasDemoGoals && (
-              <button
-                onClick={clearDemoGoals}
-                className="flex items-center justify-between p-4 rounded-xl border border-amber-500/10 hover:border-amber-500/30 bg-amber-505/5 hover:bg-amber-500/10 text-left transition-all cursor-pointer"
-              >
-                <div>
-                  <span className="block text-sm font-bold text-amber-650 dark:text-amber-400">Clear Demo Goals</span>
-                  <span className="block text-xs text-slate-405 dark:text-slate-500 mt-0.5">Remove preloaded goals</span>
-                </div>
-                <Trash2 className="h-5 w-5 text-amber-500 flex-shrink-0" />
-              </button>
-            )}
-
             {/* Export JSON */}
             <button
               onClick={exportData}
-              className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-left transition-all"
+              className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 text-left transition-all cursor-pointer"
             >
               <div>
                 <span className="block text-sm font-bold text-slate-800 dark:text-slate-200">Export JSON Backup</span>
@@ -261,7 +203,7 @@ export const Settings: React.FC = () => {
               />
               <button
                 onClick={triggerFileSelect}
-                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-left transition-all"
+                className="w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent hover:bg-indigo-50/40 dark:hover:bg-slate-800/40 text-left transition-all cursor-pointer"
               >
                 <div>
                   <span className="block text-sm font-bold text-slate-800 dark:text-slate-200">Import Portfolio Backup</span>
@@ -278,7 +220,7 @@ export const Settings: React.FC = () => {
                   clearAllData();
                 }
               }}
-              className="flex items-center justify-between p-4 rounded-xl border border-red-500/10 hover:border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-left transition-all"
+              className="flex items-center justify-between p-4 rounded-xl border border-red-200 hover:border-red-300 dark:border-red-500/10 dark:hover:border-red-500/30 bg-red-50 hover:bg-red-100 dark:bg-red-500/5 dark:hover:bg-red-500/10 text-left transition-all cursor-pointer"
             >
               <div>
                 <span className="block text-sm font-bold text-red-650 dark:text-red-400">Clear All Database Logs</span>

@@ -146,7 +146,7 @@ export const GoalModal: React.FC<GoalModalProps> = ({
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1 rounded-lg text-slate-500 dark:text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -299,7 +299,7 @@ export const GoalModal: React.FC<GoalModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-400 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-700 dark:text-slate-350 font-semibold text-sm hover:bg-indigo-50/40 hover:border-indigo-500/20 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancel
             </button>

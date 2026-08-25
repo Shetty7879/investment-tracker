@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { storage } from '../utils/localStorage';
 import type { Investment, Goal, Transaction, MoneyRecord } from '../types';
 import {
@@ -102,7 +102,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [monthlyTarget, setMonthlyTargetState] = useState<number>(() => {
-    return storage.get<number>('monthly_target_pref', 10000);
+    return storage.get<number>('monthly_target_pref', 0);
   });
 
   const [investments, setInvestments] = useState<Investment[]>(() => {
@@ -617,7 +617,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       link.click();
       URL.revokeObjectURL(url);
       showToast('Backup JSON exported successfully!', 'success');
-    } catch (e) {
+    } catch {
       showToast('Failed to export backup data.', 'warning');
     }
   };
@@ -674,13 +674,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       showToast('Invalid backup file format.', 'warning');
       return false;
-    } catch (e) {
+    } catch {
       showToast('Failed to parse backup JSON.', 'warning');
       return false;
     }
   };
 
-  const refreshMarketPrices = async () => {
+  const refreshMarketPrices = useCallback(async () => {
     if (isRefreshingPrices) return;
     setIsRefreshingPrices(true);
     try {
@@ -709,13 +709,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return next;
         });
       }
-    } catch (e) {
-      console.error("refreshMarketPrices error:", e);
+    } catch (_) {
+      console.error("refreshMarketPrices error:", _);
     } finally {
       setIsRefreshingPrices(false);
     }
-  };
+  }, [investments, dataTypeFilter, isRefreshingPrices]);
 
+// eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     refreshMarketPrices();
 
@@ -736,7 +737,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [investments.length, dataTypeFilter]);
+  }, [refreshMarketPrices]);
 
   // Deprecated resetting
   const resetData = () => {
@@ -854,6 +855,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
+// eslint-disable-next-line react/only-export-components, react-refresh/only-export-components
 export const useApp = () => {
   const context = useContext(AppContext);
   if (context === undefined) {

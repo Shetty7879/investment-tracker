@@ -79,7 +79,7 @@ export const isIndianMarketOpen = (date: Date): boolean => {
     const timeVal = hour * 100 + minute;
 
     return timeVal >= 915 && timeVal <= 1530;
-  } catch (e) {
+  } catch {
     // Fallback if Intl fails
     const day = date.getDay();
     if (day === 0 || day === 6) return false;
@@ -469,6 +469,8 @@ export const calculateMonthlyInvestments = (
 
   return monthNames.map((name, index) => {
     const totalForMonth = transactions.reduce((sum, tx) => {
+      // Skip demo/fake transactions generated for empty holdings
+      if ((tx as any).isDemo) return sum;
       const pDate = new Date(tx.date);
       if (!isNaN(pDate.getTime()) && pDate.getMonth() === index && pDate.getFullYear() === year) {
         const parent = calculatedHoldings.find(h => h.id === tx.investmentId);

@@ -276,10 +276,10 @@ export const MoneyTracker: React.FC = () => {
                   <button
                     key={f}
                     onClick={() => setStatusFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
                       statusFilter === f
-                        ? 'bg-indigo-500/10 text-indigo-655 dark:text-indigo-400 border border-indigo-500/20 shadow-sm'
-                        : 'border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-550 dark:hover:bg-slate-800/40'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-indigo-50/40 dark:hover:bg-slate-800/50 hover:text-indigo-650 dark:hover:text-indigo-400'
                     }`}
                   >
                     {f}
@@ -384,15 +384,15 @@ export const MoneyTracker: React.FC = () => {
                                   <>
                                     <button
                                       onClick={() => handleRecordPayment(r)}
-                                      className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-all cursor-pointer"
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:border-amber-500/20 transition-all cursor-pointer"
                                       title="Record Payment"
                                     >
                                       <TrendingUp className="h-4 w-4" />
                                     </button>
                                     <button
                                       onClick={() => handleMarkPaid(r.id)}
-                                      className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-all cursor-pointer"
-                                      title="Mark as Paid"
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-500/20 transition-all cursor-pointer"
+                                      title="Mark as Received"
                                     >
                                       <CheckCircle className="h-4 w-4" />
                                     </button>
@@ -400,14 +400,14 @@ export const MoneyTracker: React.FC = () => {
                                 )}
                                 <button
                                   onClick={() => handleEdit(r)}
-                                  className="p-1.5 rounded-lg text-slate-405 hover:text-indigo-650 hover:bg-indigo-500/5 dark:hover:text-indigo-400 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
                                   title="Edit"
                                 >
                                   <Edit2 className="h-4 w-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r.id)}
-                                  className="p-1.5 rounded-lg text-slate-405 hover:text-red-500 hover:bg-red-500/5 dark:hover:text-red-400 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
                                   title="Delete"
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -503,14 +503,14 @@ export const MoneyTracker: React.FC = () => {
                                   <>
                                     <button
                                       onClick={() => handleRecordPayment(r)}
-                                      className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition-all cursor-pointer"
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:border-amber-500/20 transition-all cursor-pointer"
                                       title="Record Payment"
                                     >
                                       <TrendingUp className="h-4 w-4" />
                                     </button>
                                     <button
                                       onClick={() => handleMarkPaid(r.id)}
-                                      className="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-500/20 transition-all cursor-pointer"
                                       title="Mark as Paid"
                                     >
                                       <CheckCircle className="h-4 w-4" />
@@ -519,14 +519,14 @@ export const MoneyTracker: React.FC = () => {
                                 )}
                                 <button
                                   onClick={() => handleEdit(r)}
-                                  className="p-1.5 rounded-lg text-slate-405 hover:text-indigo-650 hover:bg-indigo-500/5 dark:hover:text-indigo-400 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
                                   title="Edit"
                                 >
                                   <Edit2 className="h-4 w-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r.id)}
-                                  className="p-1.5 rounded-lg text-slate-405 hover:text-red-500 hover:bg-red-500/5 dark:hover:text-red-400 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
                                   title="Delete"
                                 >
                                   <Trash2 className="h-4 w-4" />

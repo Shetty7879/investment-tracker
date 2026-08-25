@@ -122,7 +122,7 @@ export const MoneyModal: React.FC<MoneyModalProps> = ({
           </h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 dark:text-slate-500 hover:bg-slate-550/10 transition-colors cursor-pointer"
+            className="p-1.5 rounded-xl text-slate-500 dark:text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -147,8 +147,8 @@ export const MoneyModal: React.FC<MoneyModalProps> = ({
                 onClick={() => !recordToEdit && setType('receive')}
                 className={`py-2.5 px-4 rounded-xl border text-center font-bold transition-all flex items-center justify-center gap-1.5 ${
                   type === 'receive'
-                    ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-650 dark:text-indigo-400'
-                    : 'border-slate-200 dark:border-slate-800 bg-transparent text-slate-405 hover:bg-slate-50 dark:hover:bg-slate-850'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-transparent text-slate-600 dark:text-slate-400 hover:bg-indigo-50/40 dark:hover:bg-slate-850 hover:text-indigo-650 dark:hover:text-indigo-400'
                 } ${recordToEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 <span>💰 Money to Receive</span>
@@ -158,8 +158,8 @@ export const MoneyModal: React.FC<MoneyModalProps> = ({
                 onClick={() => !recordToEdit && setType('give')}
                 className={`py-2.5 px-4 rounded-xl border text-center font-bold transition-all flex items-center justify-center gap-1.5 ${
                   type === 'give'
-                    ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-650 dark:text-indigo-400'
-                    : 'border-slate-200 dark:border-slate-800 bg-transparent text-slate-405 hover:bg-slate-50 dark:hover:bg-slate-850'
+                    ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-800 bg-transparent text-slate-600 dark:text-slate-400 hover:bg-indigo-50/40 dark:hover:bg-slate-850 hover:text-indigo-650 dark:hover:text-indigo-400'
                 } ${recordToEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 <span>💸 Money to Give</span>
@@ -171,7 +171,7 @@ export const MoneyModal: React.FC<MoneyModalProps> = ({
             {/* Person Name */}
             <div>
               <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
-                👤 Get Money From / Person *
+                👤 Person Name *
               </label>
               <input
                 type="text"
@@ -258,7 +258,7 @@ export const MoneyModal: React.FC<MoneyModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-700 dark:text-slate-350 font-bold text-xs hover:bg-indigo-50/40 hover:border-indigo-500/20 dark:hover:bg-slate-800 transition-all cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>

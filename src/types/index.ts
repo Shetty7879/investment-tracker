@@ -101,7 +101,7 @@ export interface Investment {
   // Savings / Cash
   interestRateSavings?: number;
 
-  // IPOs
+  // IPOs (legacy fields – kept for service-layer compatibility)
   ipoLotsApplied?: number;
   ipoQuantityApplied?: number;
   ipoAllotmentStatus?: 'Applied' | 'Payment Pending' | 'Allocation Pending' | 'Allotted' | 'Partially Allotted' | 'Not Allotted' | 'Refund Pending' | 'Refunded' | 'Listed' | 'Sold';
@@ -112,6 +112,16 @@ export interface Investment {
   ipoSellingDate?: string;
   appliedAmount?: number;
   allocatedQuantity?: number;
+
+  // IPOs (new fields added by IPO-specific form)
+  companyName?: string;
+  issuePrice?: number;
+  appliedLots?: number;
+  sharesPerLot?: number;
+  allottedLots?: number;
+  allotmentStatus?: 'Applied' | 'Allotted' | 'Not Allotted' | 'Withdrawn';
+  applicationDate?: string;
+  listingDate?: string;
 }
 
 export interface Goal {

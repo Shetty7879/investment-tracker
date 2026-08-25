@@ -16,8 +16,7 @@ import {
   AlertCircle,
   PlusCircle,
   MinusCircle,
-  Link,
-  Database
+  Link
 } from 'lucide-react';
 
 export const Goals: React.FC = () => {
@@ -25,10 +24,7 @@ export const Goals: React.FC = () => {
     goals,
     updateGoal,
     deleteGoal,
-    formatCurrency,
-    dataTypeFilter,
-    setDataTypeFilter,
-    loadDemoGoals
+    formatCurrency
   } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -127,17 +123,8 @@ export const Goals: React.FC = () => {
     'Other': { bg: 'bg-slate-500/10 dark:bg-slate-950/20', text: 'text-slate-600 dark:text-slate-400' },
   };
 
-  // Filter goals by dataTypeFilter
-  const typeFilteredGoals = goals.filter(g => {
-    if (dataTypeFilter === 'Real') {
-      return !g.isDemo;
-    } else if (dataTypeFilter === 'Demo') {
-      return !!g.isDemo;
-    }
-    return true; // All
-  });
-
-  const totalDemoCount = goals.filter(g => g.isDemo).length;
+  // Filter goals to show real data only
+  const typeFilteredGoals = goals.filter(g => !g.isDemo);
 
   return (
     <div className="space-y-6 animate-slide-in">
@@ -157,43 +144,13 @@ export const Goals: React.FC = () => {
 
         {/* Global Filter & Adding */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Data Filter Switcher */}
-          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
-            <span className="text-[9px] uppercase font-bold text-slate-405 dark:text-slate-500 px-2 flex items-center gap-1">
-              <Database className="h-3 w-3" /> Data:
-            </span>
-            {(['Real', 'Demo', 'All'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setDataTypeFilter(f)}
-                className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                  dataTypeFilter === f
-                    ? 'bg-white dark:bg-[#0d0f17] text-indigo-650 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-slate-850'
-                    : 'text-slate-400 hover:text-slate-655 dark:hover:text-slate-300'
-                }`}
-              >
-                {f === 'Real' ? 'Real Goals' : f === 'Demo' ? 'Demo Goals' : 'All'}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {totalDemoCount === 0 && (
-              <button
-                onClick={loadDemoGoals}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 font-semibold text-sm transition-colors cursor-pointer shadow-sm"
-              >
-                <span>Load Demo Goals</span>
-              </button>
-            )}
-            <button
-              onClick={handleAddNew}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors cursor-pointer shadow-lg shadow-indigo-650/15"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Create Goal</span>
-            </button>
-          </div>
+          <button
+            onClick={handleAddNew}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors cursor-pointer shadow-lg shadow-indigo-650/15"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Goal</span>
+          </button>
         </div>
       </div>
 
@@ -205,13 +162,10 @@ export const Goals: React.FC = () => {
           </div>
           
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-            {dataTypeFilter === 'Real' ? 'No financial goals yet' : 'No demo goals loaded'}
+            No financial goals yet
           </h3>
           <p className="text-sm text-slate-405 dark:text-slate-555 max-w-sm mx-auto mb-8 font-semibold">
-            {dataTypeFilter === 'Real' 
-              ? 'Start building your financial map by defining your first cash milestone.'
-              : 'Click Load Demo Goals to explore with sample goal data.'
-            }
+            Start building your financial map by defining your first cash milestone.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -222,14 +176,6 @@ export const Goals: React.FC = () => {
               <Plus className="h-4 w-4" />
               <span>+ Create Goal</span>
             </button>
-            {totalDemoCount === 0 && (
-              <button
-                onClick={loadDemoGoals}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-300 font-semibold text-sm transition-all"
-              >
-                <span>Load Sample Goals</span>
-              </button>
-            )}
           </div>
         </div>
       ) : (
@@ -313,21 +259,23 @@ export const Goals: React.FC = () => {
                   {/* Saved vs Target totals */}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-3 border-t border-slate-100 dark:border-slate-850 text-xs">
                     <div>
-                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">📈 Current Progress</span>
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        {goal.linkedAssetId ? '💰 Principal Invested' : '📈 Current Progress'}
+                      </span>
                       <span className="font-extrabold text-slate-700 dark:text-slate-300 block mt-0.5">
                         {formatCurrency(contributed)}
                       </span>
                     </div>
                     {goal.linkedAssetId ? (
                       <div>
-                        <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">📈 Current Progress</span>
-                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400 block mt-0.5">
+                        <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">📈 Current Value</span>
+                        <span className="font-extrabold text-indigo-650 dark:text-indigo-400 block mt-0.5">
                           {formatCurrency(currentValue)}
                         </span>
                       </div>
                     ) : (
                       <div>
-                        <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">💰 Target Amount</span>
+                        <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">🎯 Target Amount</span>
                         <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
                           {formatCurrency(target)}
                         </span>
@@ -335,7 +283,7 @@ export const Goals: React.FC = () => {
                     )}
                     {goal.linkedAssetId && (
                       <div>
-                        <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">💰 Target Amount</span>
+                        <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">🎯 Target Amount</span>
                         <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
                           {formatCurrency(target)}
                         </span>
@@ -385,14 +333,14 @@ export const Goals: React.FC = () => {
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => handleEdit(goal)}
-                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-450 hover:text-indigo-650 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-indigo-500/20 cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
                       title="Edit Goal"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(goal.id)}
-                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-450 hover:text-red-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-red-550/20 cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
                       title="Delete Goal"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -405,7 +353,7 @@ export const Goals: React.FC = () => {
                       <>
                         <button
                           onClick={() => handleWithdrawMoney(goal)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-650 dark:text-slate-400 hover:bg-rose-500/5 hover:text-rose-500 hover:border-rose-500/20 text-[10px] font-bold cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:bg-rose-500/5 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/20 text-[10px] font-bold cursor-pointer"
                           title="Withdraw Money"
                         >
                           <MinusCircle className="h-3.5 w-3.5 text-rose-500" />
@@ -413,7 +361,7 @@ export const Goals: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleAddMoney(goal)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-650 dark:text-indigo-400 hover:bg-indigo-500 hover:text-white border border-indigo-500/15 text-[10px] font-bold cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-650 hover:text-white hover:border-indigo-650 text-[10px] font-bold cursor-pointer"
                           title="Add Money"
                         >
                           <PlusCircle className="h-3.5 w-3.5" />

@@ -5,8 +5,7 @@ import {
   Briefcase,
   Plus,
   ArrowUpRight,
-  ArrowDownRight,
-  Database
+  ArrowDownRight
 } from 'lucide-react';
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
@@ -29,10 +28,8 @@ const REVERSE_TYPE_MAPPING: Record<string, string> = {
 export const Dashboard: React.FC = () => {
   const {
     formatCurrency,
-    dataTypeFilter,
-    setDataTypeFilter,
     navigateTo,
-    moneyRecords
+    moneyRecords,
   } = useApp();
 
   // Modal State
@@ -51,12 +48,8 @@ export const Dashboard: React.FC = () => {
     .sort((a, b) => new Date(b.buyDate || b.purchaseDate || 0).getTime() - new Date(a.buyDate || a.purchaseDate || 0).getTime())
     .slice(0, 5);
 
-  // Filter money tracker records based on active dataTypeFilter
-  const filteredMoneyRecords = moneyRecords.filter(r => {
-    if (dataTypeFilter === 'Real') return !r.isDemo;
-    if (dataTypeFilter === 'Demo') return !!r.isDemo;
-    return true;
-  });
+  // Filter money tracker records to show real data only
+  const filteredMoneyRecords = moneyRecords.filter(r => !r.isDemo);
 
   const totalToReceive = filteredMoneyRecords
     .filter(r => r.type === 'receive')
@@ -88,26 +81,6 @@ export const Dashboard: React.FC = () => {
         
         {/* Global Filter Switchers & Quick Actions */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Data Filter */}
-          <div className="flex items-center gap-1 bg-white dark:bg-[#0d0f17] p-1.5 rounded-xl border border-slate-205 dark:border-slate-800">
-            <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-slate-550 px-2 flex items-center gap-1">
-              <Database className="h-3 w-3" /> Data:
-            </span>
-            {['All', 'Real', 'Demo'].map(f => (
-              <button
-                key={f}
-                onClick={() => setDataTypeFilter(f as any)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                  dataTypeFilter === f
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
-                    : 'text-slate-405 dark:text-slate-500 hover:text-slate-655 dark:hover:text-slate-400'
-                }`}
-              >
-                {f === 'Real' ? 'Real' : f === 'Demo' ? 'Demo' : 'All'}
-              </button>
-            ))}
-          </div>
-
           <button
             onClick={() => setIsAssetModalOpen(true)}
             className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm hover:shadow transition-all cursor-pointer whitespace-nowrap active:scale-95"
@@ -247,7 +220,7 @@ export const Dashboard: React.FC = () => {
                 <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
                   {recentInvestments.map(inv => {
                     const displayType = REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
-                    const broker = inv.broker || 'Other';
+                    const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other');
                     return (
                       <tr
                         key={inv.id}
@@ -293,7 +266,7 @@ export const Dashboard: React.FC = () => {
             <div className="md:hidden space-y-4">
               {recentInvestments.map(inv => {
                 const displayType = REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
-                const broker = inv.broker || 'Other';
+                const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other');
                 return (
                   <div
                     key={inv.id}

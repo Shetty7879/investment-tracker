@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import SplashScreen from '../components/SplashScreen';
 import {
@@ -19,6 +19,13 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
+  const [showSplash, setShowSplash] = useState(true);
+  useEffect(() => {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timeout = prefersReduced ? 200 : 1300;
+    const timer = setTimeout(() => setShowSplash(false), timeout);
+    return () => clearTimeout(timer);
+  }, []);
   const { theme, toggleTheme, activeTab, navigateTo } = useApp();
 
   const navigationItems = [
@@ -54,7 +61,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
   return (
     <div className="min-height-screen flex flex-col bg-[#f8fafc] text-slate-800 dark:bg-[#08090d] dark:text-slate-100 min-h-screen transition-colors duration-200 animate-fade-in">
-      <SplashScreen />
+      {showSplash && <SplashScreen />}
       <div className="flex flex-1">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:flex flex-col w-64 border-r border-slate-200 dark:border-slate-850 bg-white dark:bg-[#0d0f17] shrink-0 sticky top-0 h-screen animate-slide-in">
@@ -127,7 +134,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
               {/* Theme Toggle Button */}
               <button
                 onClick={toggleTheme}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-all active:scale-95 shadow-sm"
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] hover:bg-indigo-50/40 hover:border-indigo-500/20 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all active:scale-95 shadow-sm cursor-pointer"
                 aria-label={theme === 'dark' ? 'Activate Light Mode' : 'Activate Dark Mode'}
               >
                 {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-500" />}
@@ -136,7 +143,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
               {/* Profile Shortcut */}
               <button
                 onClick={() => navigateTo('settings')}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-all active:scale-95 shadow-sm"
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] hover:bg-indigo-50/40 hover:border-indigo-500/20 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all active:scale-95 shadow-sm cursor-pointer"
                 aria-label="Profile Settings"
               >
                 <User className="h-5 w-5" />
@@ -163,7 +170,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
               className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-150 active:scale-95 cursor-pointer ${
                 isActive
                   ? 'text-indigo-600 dark:text-indigo-400 font-bold scale-102'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'text-slate-550 dark:text-slate-450 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
               <Icon className={`h-5 w-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
