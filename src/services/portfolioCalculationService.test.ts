@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import {
   calculateHoldingMetrics,
   calculatePortfolioTotals,
@@ -1158,42 +1158,41 @@ describe('Portfolio Calculation Service Unit Tests', () => {
   });
 
   test('getInvestmentAge calculates correct dynamic human-readable age', () => {
-    const getLocalYYYYMMDD = (d: Date): string => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
+    // Set a fixed system time: Wednesday, August 26, 2026
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 26));
 
-    const todayStr = getLocalYYYYMMDD(new Date());
-    
-    // Less than 1 day -> Today
-    expect(getInvestmentAge(todayStr)).toBe('Today');
-    
-    // Future date -> 0 days
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = getLocalYYYYMMDD(tomorrow);
-    expect(getInvestmentAge(tomorrowStr)).toBe('0 days');
-    
-    // Less than 30 days -> X days
-    const tenDaysAgo = new Date();
-    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-    const tenDaysAgoStr = getLocalYYYYMMDD(tenDaysAgo);
-    expect(getInvestmentAge(tenDaysAgoStr)).toBe('10 days');
-    
-    // Less than 12 months -> X months
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const threeMonthsAgoStr = getLocalYYYYMMDD(threeMonthsAgo);
-    const age3m = getInvestmentAge(threeMonthsAgoStr);
-    expect(age3m).toMatch(/(3|2) month/);
-    
-    // 12 months or more -> X years X months
-    const twoYearsAgo = new Date();
-    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-    const twoYearsAgoStr = getLocalYYYYMMDD(twoYearsAgo);
-    const age2y = getInvestmentAge(twoYearsAgoStr);
-    expect(age2y).toMatch(/2 year/);
+    try {
+      // Same-day investment -> Today
+      expect(getInvestmentAge('2026-08-26')).toBe('Today');
+      
+      // Future date -> 0 days
+      expect(getInvestmentAge('2026-08-27')).toBe('0 days');
+      
+      // 1 day / 2 days (singular/plural)
+      expect(getInvestmentAge('2026-08-25')).toBe('1 day');
+      expect(getInvestmentAge('2026-08-24')).toBe('2 days');
+      
+      // 1 month / 2 months (singular/plural)
+      expect(getInvestmentAge('2026-07-26')).toBe('1 month');
+      expect(getInvestmentAge('2026-06-26')).toBe('2 months');
+      
+      // 1 year / 2 years (singular/plural)
+      expect(getInvestmentAge('2025-08-26')).toBe('1 year');
+      expect(getInvestmentAge('2024-08-26')).toBe('2 years');
+      
+      // Zero units omission (e.g. 2 years 0 months 10 days -> 2 years 10 days)
+      expect(getInvestmentAge('2024-08-16')).toBe('2 years 10 days');
+      
+      // Zero units omission (e.g. 0 months 5 days -> 5 days)
+      expect(getInvestmentAge('2026-08-21')).toBe('5 days');
+      
+      // Multi-unit formatting and zero omissions
+      expect(getInvestmentAge('2026-07-25')).toBe('1 month 1 day');
+      expect(getInvestmentAge('2026-06-11')).toBe('2 months 15 days');
+      expect(getInvestmentAge('2025-06-21')).toBe('1 year 2 months 5 days');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

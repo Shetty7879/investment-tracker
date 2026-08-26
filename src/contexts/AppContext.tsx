@@ -171,7 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Hash-based Router State
   const [activeTab, setActiveTab] = useState<string>(() => {
     const hash = window.location.hash.replace('#/', '');
-    const validTabs = ['dashboard', 'investments', 'monthly', 'goals', 'reports', 'settings', 'money-tracker'];
+    const validTabs = ['dashboard', 'investments', 'portfolio', 'monthly', 'goals', 'reports', 'settings', 'money-tracker'];
     return validTabs.includes(hash) ? hash : 'dashboard';
   });
 
@@ -301,7 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#/', '');
-      const validTabs = ['dashboard', 'investments', 'monthly', 'goals', 'reports', 'settings', 'money-tracker'];
+      const validTabs = ['dashboard', 'investments', 'portfolio', 'monthly', 'goals', 'reports', 'settings', 'money-tracker'];
       if (validTabs.includes(hash)) {
         setActiveTab(hash);
       } else if (hash === '') {

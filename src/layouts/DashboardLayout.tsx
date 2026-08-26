@@ -11,7 +11,9 @@ import {
   Sun,
   Moon,
   User,
-  Coins
+  Coins,
+  Clock,
+  Wallet
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -31,6 +33,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const navigationItems = [
     { id: 'dashboard', name: '📊 Dashboard', icon: LayoutDashboard },
     { id: 'investments', name: '📈 Investments', icon: Briefcase },
+    { id: 'portfolio', name: '💼 Portfolio', icon: Wallet },
+    { id: 'age-of-investments', name: '⏳ Age of Investments', icon: Clock },
     { id: 'monthly', name: '🗓️ Monthly', icon: Calendar },
     { id: 'goals', name: '🎯 Goals', icon: Target },
     { id: 'reports', name: '📑 Reports', icon: BarChart3 },
@@ -42,6 +46,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const pageHeaders: Record<string, string> = {
     dashboard: '📊 Dashboard',
     investments: '📈 Investments Portfolio',
+    portfolio: '💼 Portfolio',
+    'age-of-investments': '⏳ Age of Investments',
     monthly: '🗓️ Monthly Target & Goals',
     goals: '🎯 Financial Goals',
     reports: '📑 Investment Reports',
@@ -93,8 +99,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                       : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 group-hover:scale-105 transition-transform duration-200 ${isActive ? 'text-indigo-500' : 'text-slate-405 dark:text-slate-500'}`} />
-                  {item.name}
+                  <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                    <Icon className={`h-5 w-5 group-hover:scale-105 transition-transform duration-200 ${isActive ? 'text-indigo-500' : 'text-slate-405 dark:text-slate-500'}`} />
+                  </div>
+                  <span className="text-left flex-1 select-none whitespace-normal leading-tight">
+                    {item.name}
+                  </span>
                 </button>
               );
             })}

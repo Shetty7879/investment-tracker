@@ -409,40 +409,64 @@ export const getInvestmentAge = (dateStr: string | undefined): string => {
   if (diffTime < 0) {
     return '0 days';
   }
-  
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) {
+  if (diffTime === 0) {
     return 'Today';
   }
-  if (diffDays < 30) {
-    return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
-  }
-  
-  // Calculate difference in months
-  let yearsDiff = now.getFullYear() - buyYear;
-  let monthsDiff = now.getMonth() - buyMonth;
-  
-  if (monthsDiff < 0) {
-    yearsDiff--;
-    monthsDiff += 12;
-  }
-  
-  // Day of month correction
-  if (now.getDate() < buyDay) {
-    monthsDiff--;
-    if (monthsDiff < 0) {
-      yearsDiff--;
-      monthsDiff += 12;
+
+  // Helpers to add years and months without rollover issues
+  const addYears = (d: Date, years: number): Date => {
+    const res = new Date(d.getTime());
+    res.setFullYear(res.getFullYear() + years);
+    if (d.getMonth() === 1 && d.getDate() === 29 && res.getMonth() !== 1) {
+      res.setDate(0); // Pin to Feb 28 on non-leap years
     }
+    return res;
+  };
+
+  const addMonths = (d: Date, months: number): Date => {
+    const res = new Date(d.getTime());
+    const expectedMonth = (res.getMonth() + months) % 12;
+    res.setMonth(res.getMonth() + months);
+    if (res.getMonth() !== expectedMonth) {
+      res.setDate(0); // Pin to last day of expected month if rollover occurs
+    }
+    return res;
+  };
+
+  // Find difference components
+  let years = nowMidnight.getFullYear() - buyMidnight.getFullYear();
+  let testDate = addYears(buyMidnight, years);
+  if (testDate > nowMidnight) {
+    years--;
+    testDate = addYears(buyMidnight, years);
   }
-  
-  const totalMonths = (yearsDiff * 12) + monthsDiff;
-  if (totalMonths < 12) {
-    const finalMonths = Math.max(1, totalMonths);
-    return `${finalMonths} month${finalMonths !== 1 ? 's' : ''}`;
-  } else {
-    const yLabel = `${yearsDiff} year${yearsDiff !== 1 ? 's' : ''}`;
-    const mLabel = monthsDiff > 0 ? ` ${monthsDiff} month${monthsDiff !== 1 ? 's' : ''}` : '';
-    return `${yLabel}${mLabel}`;
+
+  let months = 0;
+  while (true) {
+    const nextTestDate = addMonths(testDate, 1);
+    if (nextTestDate > nowMidnight) {
+      break;
+    }
+    testDate = nextTestDate;
+    months++;
   }
+
+  const timeDiff = nowMidnight.getTime() - testDate.getTime();
+  const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+
+  const partsFormatted: string[] = [];
+  if (years > 0) {
+    partsFormatted.push(`${years} year${years !== 1 ? 's' : ''}`);
+  }
+  if (months > 0) {
+    partsFormatted.push(`${months} month${months !== 1 ? 's' : ''}`);
+  }
+  if (days > 0) {
+    partsFormatted.push(`${days} day${days !== 1 ? 's' : ''}`);
+  }
+
+  if (partsFormatted.length === 0) {
+    return 'Today';
+  }
+  return partsFormatted.join(' ');
 };

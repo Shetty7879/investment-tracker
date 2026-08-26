@@ -4,6 +4,8 @@ import { AppProvider, useApp } from './contexts/AppContext';
 import { DashboardLayout } from './layouts/DashboardLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Investments } from './pages/Investments';
+import { Portfolio } from './pages/Portfolio';
+import { AgeOfInvestments } from './pages/AgeOfInvestments';
 import { Monthly } from './pages/Monthly';
 import { Goals } from './pages/Goals';
 import { Reports } from './pages/Reports';
@@ -22,6 +24,10 @@ const AppContent: React.FC = () => {
         return <Dashboard />;
       case 'investments':
         return <Investments />;
+      case 'portfolio':
+        return <Portfolio />;
+      case 'age-of-investments':
+        return <AgeOfInvestments />;
       case 'monthly':
         return <Monthly />;
       case 'goals':

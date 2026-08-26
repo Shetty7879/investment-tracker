@@ -38,7 +38,6 @@ export const Monthly: React.FC = () => {
 
   // Helper calculations
   const investedThisMonth = monthlyData[currentMonthIdx]?.actual ?? 0;
-  const ytdInvested = monthlyData.reduce((sum, m, idx) => (idx <= currentMonthIdx ? sum + m.actual : sum), 0);
   const remainingThisMonth = monthlyTarget > 0 ? monthlyTarget - investedThisMonth : 0;
   const progressPercent = monthlyTarget > 0 ? (investedThisMonth / monthlyTarget) * 100 : 0;
 
@@ -200,17 +199,6 @@ export const Monthly: React.FC = () => {
         </div>
       </div>
 
-      {/* YTD Invested Card */}
-      <div className="mt-4">
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-5 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-2">
-            <span>📊 YTD Invested</span>
-          </div>
-          <div className="text-2xl font-extrabold text-slate-900 dark:text-white leading-none">
-            {formatCurrency(ytdInvested)}
-          </div>
-        </div>
-      </div>
 
       {/* Empty state when no investments this month */}
       {showEmptyState && (
