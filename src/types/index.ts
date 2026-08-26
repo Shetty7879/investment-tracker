@@ -92,9 +92,14 @@ export interface Investment {
   interestRate?: number;
   maturityDate?: string;
   compoundingFrequency?: 'Monthly' | 'Quarterly' | 'Half-Yearly' | 'Yearly';
+  tenureYears?: number;
+  tenureMonths?: number;
+  tenureDays?: number;
+  maturityAmount?: number;
 
   // Commodities
   weightGrams?: number;
+  weightUnit?: 'g' | 'mg';
   buyPricePerGram?: number;
   currentPricePerGram?: number;
 

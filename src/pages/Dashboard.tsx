@@ -266,7 +266,7 @@ export const Dashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right text-slate-700 dark:text-slate-350 whitespace-nowrap font-bold">
-                          {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} g` : inv.quantity}
+                          {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} ${inv.weightUnit || 'g'}` : inv.quantity}
                         </td>
                         <td className="px-4 py-3.5 text-right font-extrabold text-indigo-650 dark:text-indigo-400 whitespace-nowrap">
                           {formatCurrency(inv.investedAmount)}
@@ -311,8 +311,8 @@ export const Dashboard: React.FC = () => {
                         <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">
                           {isCommodityCategory(inv.category || inv.assetType) ? 'Weight' : 'Quantity'}
                         </span>
-                        <span className="font-bold text-slate-850 dark:text-slate-200">
-                          {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} g` : inv.quantity}
+                        <span className="font-bold text-slate-855 dark:text-slate-200">
+                          {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} ${inv.weightUnit || 'g'}` : inv.quantity}
                         </span>
                       </div>
                       <div>

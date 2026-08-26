@@ -94,6 +94,35 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const [currentPricePerGram, setCurrentPricePerGram] = useState('');
   const [manuallyEnteredInvestedAmount, setManuallyEnteredInvestedAmount] = useState('');
   const [manuallyEnteredCurrentValue, setManuallyEnteredCurrentValue] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'g' | 'mg'>('g');
+
+  // ── Fixed Deposit-specific fields ─────────────────────────────────
+  const [fdPrincipalAmount, setFdPrincipalAmount] = useState('');
+  const [fdInterestRate, setFdInterestRate] = useState('');
+  const [fdTenureYears, setFdTenureYears] = useState('0');
+  const [fdTenureMonths, setFdTenureMonths] = useState('0');
+  const [fdTenureDays, setFdTenureDays] = useState('0');
+  const [fdMaturityAmount, setFdMaturityAmount] = useState('');
+  const [fdMaturityDate, setFdMaturityDate] = useState('');
+  const [fdCompoundingFrequency, setFdCompoundingFrequency] = useState<'Monthly' | 'Quarterly' | 'Half-Yearly' | 'Yearly'>('Quarterly');
+
+  // Auto-calculate FD Maturity Date when Start Date or Tenure changes
+  React.useEffect(() => {
+    if (type === 'Fixed Deposit' && buyDate) {
+      const y = parseInt(fdTenureYears || '0', 10);
+      const m = parseInt(fdTenureMonths || '0', 10);
+      const d = parseInt(fdTenureDays || '0', 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d) && (y > 0 || m > 0 || d > 0)) {
+        const date = new Date(buyDate);
+        if (!isNaN(date.getTime())) {
+          if (y > 0) date.setFullYear(date.getFullYear() + y);
+          if (m > 0) date.setMonth(date.getMonth() + m);
+          if (d > 0) date.setDate(date.getDate() + d);
+          setFdMaturityDate(date.toISOString().split('T')[0]);
+        }
+      }
+    }
+  }, [type, buyDate, fdTenureYears, fdTenureMonths, fdTenureDays]);
 
   const handleMfAmountChange = (val: string) => {
     setMfInvestmentAmount(val);
@@ -259,6 +288,33 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           setCurrentPricePerGram(investmentToEdit.currentPricePerGram ? investmentToEdit.currentPricePerGram.toString() : (investmentToEdit.currentPrice ? investmentToEdit.currentPrice.toString() : ''));
           setManuallyEnteredInvestedAmount(investmentToEdit.investedAmount ? investmentToEdit.investedAmount.toString() : '');
           setManuallyEnteredCurrentValue(investmentToEdit.currentValue ? investmentToEdit.currentValue.toString() : '');
+          setWeightUnit((investmentToEdit as any).weightUnit || 'g');
+          
+          setFdPrincipalAmount('');
+          setFdInterestRate('');
+          setFdTenureYears('0');
+          setFdTenureMonths('0');
+          setFdTenureDays('0');
+          setFdMaturityAmount('');
+          setFdMaturityDate('');
+          setFdCompoundingFrequency('Quarterly');
+        } else if (resolvedType === 'Fixed Deposit') {
+          setMfUnits('');
+          setMfNav('');
+          setMfInvestmentAmount('');
+          setCurrentPricePerGram('');
+          setManuallyEnteredInvestedAmount('');
+          setManuallyEnteredCurrentValue('');
+          setWeightUnit('g');
+          
+          setFdPrincipalAmount(investmentToEdit.investedAmount ? investmentToEdit.investedAmount.toString() : (investmentToEdit.buyPrice ? investmentToEdit.buyPrice.toString() : ''));
+          setFdInterestRate(investmentToEdit.interestRate ? investmentToEdit.interestRate.toString() : '');
+          setFdTenureYears(investmentToEdit.tenureYears !== undefined ? investmentToEdit.tenureYears.toString() : '0');
+          setFdTenureMonths(investmentToEdit.tenureMonths !== undefined ? investmentToEdit.tenureMonths.toString() : '0');
+          setFdTenureDays(investmentToEdit.tenureDays !== undefined ? investmentToEdit.tenureDays.toString() : '0');
+          setFdMaturityAmount(investmentToEdit.maturityAmount ? investmentToEdit.maturityAmount.toString() : '');
+          setFdMaturityDate(investmentToEdit.maturityDate || '');
+          setFdCompoundingFrequency(investmentToEdit.compoundingFrequency || 'Quarterly');
         } else {
           setMfUnits('');
           setMfNav('');
@@ -290,6 +346,15 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       setBuyPrice('');
       setBuyDate(new Date().toISOString().split('T')[0]);
       setNotes('');
+      setWeightUnit('g');
+      setFdPrincipalAmount('');
+      setFdInterestRate('');
+      setFdTenureYears('0');
+      setFdTenureMonths('0');
+      setFdTenureDays('0');
+      setFdMaturityAmount('');
+      setFdMaturityDate('');
+      setFdCompoundingFrequency('Quarterly');
       setPriceLow('');
       setPriceHigh('');
       setFinalAllotmentPrice('');
@@ -411,6 +476,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       if (!applicationDate) errs.applicationDate = 'Application Date is required.';
     } else {
       const isCommodityType = type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum';
+      const isFDType = type === 'Fixed Deposit';
       if (isCommodityType) {
         if (!quantity || isNaN(qtyNum) || qtyNum <= 0)
           errs.quantity = 'Weight (grams) must be greater than 0.';
@@ -420,6 +486,26 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         const curPricePGNum = parseFloat(currentPricePerGram);
         if (currentPricePerGram && (isNaN(curPricePGNum) || curPricePGNum <= 0)) {
           errs.currentPricePerGram = 'Current Price per Gram must be greater than 0.';
+        }
+      } else if (isFDType) {
+        const principalNum = parseFloat(fdPrincipalAmount);
+        if (!fdPrincipalAmount || isNaN(principalNum) || principalNum <= 0) {
+          errs.fdPrincipalAmount = 'Principal Amount must be greater than 0.';
+        }
+        const rateNum = parseFloat(fdInterestRate);
+        if (fdInterestRate && (isNaN(rateNum) || rateNum < 0)) {
+          errs.fdInterestRate = 'Interest Rate cannot be negative.';
+        }
+        const yearsNum = parseInt(fdTenureYears || '0', 10);
+        const monthsNum = parseInt(fdTenureMonths || '0', 10);
+        const daysNum = parseInt(fdTenureDays || '0', 10);
+        if (yearsNum <= 0 && monthsNum <= 0 && daysNum <= 0) {
+          errs.fdTenure = 'At least one tenure value must be greater than 0.';
+        }
+        if (fdMaturityDate && buyDate) {
+          if (new Date(fdMaturityDate) < new Date(buyDate)) {
+            errs.fdMaturityDate = 'Maturity Date cannot be before the Start/Deposit Date.';
+          }
         }
         
         const manualInvestedNum = parseFloat(manuallyEnteredInvestedAmount);
@@ -504,13 +590,22 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     } else {
       const isMF = type === 'Mutual Fund';
       const isCommodity = type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum';
+      const isFD = type === 'Fixed Deposit';
+      
+      const principalAmountNum = parseFloat(fdPrincipalAmount);
+      const interestRateNum = parseFloat(fdInterestRate);
+      const tenureYearsNum = parseInt(fdTenureYears || '0', 10);
+      const tenureMonthsNum = parseInt(fdTenureMonths || '0', 10);
+      const tenureDaysNum = parseInt(fdTenureDays || '0', 10);
+      const maturityAmountNum = fdMaturityAmount ? parseFloat(fdMaturityAmount) : undefined;
+
       payload = {
         assetName: name.trim(),
         category,
         assetType: category,
         broker,
-        quantity: qtyNum,
-        buyPrice: priceNum,
+        quantity: isFD ? 1 : qtyNum,
+        buyPrice: isFD ? principalAmountNum : priceNum,
         buyDate,
         purchaseDate: buyDate,
         notes: notes.trim() || undefined,
@@ -522,11 +617,22 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         ...(isMF ? { units: qtyNum, nav: priceNum, investedAmount: standardInvestedAmount } : {}),
         ...(isCommodity ? {
           weightGrams: qtyNum,
+          weightUnit: weightUnit,
           buyPricePerGram: priceNum,
           currentPricePerGram: currentPricePerGram ? parseFloat(currentPricePerGram) : undefined,
           currentPrice: currentPricePerGram ? parseFloat(currentPricePerGram) : undefined,
           investedAmount: manuallyEnteredInvestedAmount ? parseFloat(manuallyEnteredInvestedAmount) : undefined,
           currentValue: manuallyEnteredCurrentValue ? parseFloat(manuallyEnteredCurrentValue) : undefined,
+        } : {}),
+        ...(isFD ? {
+          investedAmount: principalAmountNum,
+          interestRate: isNaN(interestRateNum) ? undefined : interestRateNum,
+          tenureYears: tenureYearsNum,
+          tenureMonths: tenureMonthsNum,
+          tenureDays: tenureDaysNum,
+          maturityAmount: maturityAmountNum,
+          maturityDate: fdMaturityDate || undefined,
+          compoundingFrequency: fdCompoundingFrequency,
         } : {})
       } as Omit<Investment, 'id'>;
     }
@@ -591,8 +697,8 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
           {/* ── Investment Name / IPO / Company Name ── */}
           <div>
-            <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
-              {isIPO ? '📋 IPO / Company Name *' : type === 'Other' ? 'Asset Description / Details *' : 'Investment Name *'}
+            <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
+              {isIPO ? '📋 IPO / Company Name *' : type === 'Fixed Deposit' ? 'Investment / FD Name *' : type === 'Other' ? 'Asset Description / Details *' : 'Investment Name *'}
             </label>
             <input
               type="text"
@@ -622,8 +728,8 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                Platform / Broker *
+              <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                {type === 'Fixed Deposit' ? 'Platform / Bank *' : 'Platform / Broker *'}
               </label>
               <select
                 value={broker}
@@ -914,50 +1020,60 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
               ) : type === 'Digital Gold' || type === 'Digital Silver' || type === 'Digital Platinum' ? (
                 // Commodity fields
                 <div className="space-y-5">
-                  {/* Row 1: Weight & Buy Price per Gram */}
+                  {/* Row 1: Weight & Buy Price */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-405 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                        Weight (grams) *
+                        Weight *
                       </label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
-                        placeholder="e.g. 10"
-                        className={inputClass(errors.quantity)}
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="any"
+                          value={quantity}
+                          onChange={(e) => setQuantity(e.target.value)}
+                          placeholder={weightUnit === 'mg' ? "e.g. 500" : "e.g. 1.25"}
+                          className={`flex-1 ${inputClass(errors.quantity)}`}
+                        />
+                        <select
+                          value={weightUnit}
+                          onChange={(e) => setWeightUnit(e.target.value as 'g' | 'mg')}
+                          className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2.5 px-3.5 text-sm outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17] font-semibold"
+                        >
+                          <option value="g" className="dark:bg-[#0d0f17]">g</option>
+                          <option value="mg" className="dark:bg-[#0d0f17]">mg</option>
+                        </select>
+                      </div>
                       {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                        Buy Price per Gram (₹) *
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Buy Price per {weightUnit === 'mg' ? 'Milligram' : 'Gram'} (₹) *
                       </label>
                       <input
                         type="number"
                         step="any"
                         value={buyPrice}
                         onChange={(e) => setBuyPrice(e.target.value)}
-                        placeholder="e.g. 7000"
+                        placeholder={weightUnit === 'mg' ? "e.g. 7" : "e.g. 7000"}
                         className={inputClass(errors.buyPrice)}
                       />
                       {errors.buyPrice && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.buyPrice}</p>}
                     </div>
                   </div>
 
-                  {/* Row 2: Current Price per Gram */}
+                  {/* Row 2: Current Price */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
-                      Current Price per Gram (₹) (Optional)
+                    <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
+                      Current Price per {weightUnit === 'mg' ? 'Milligram' : 'Gram'} (₹) (Optional)
                     </label>
                     <input
                       type="number"
                       step="any"
                       value={currentPricePerGram}
                       onChange={(e) => setCurrentPricePerGram(e.target.value)}
-                      placeholder="e.g. 7500"
+                      placeholder={weightUnit === 'mg' ? "e.g. 7.5" : "e.g. 7500"}
                       className={inputClass(errors.currentPricePerGram)}
                     />
                     {errors.currentPricePerGram && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.currentPricePerGram}</p>}
@@ -1000,12 +1116,138 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     ℹ️ For weight-based commodities, values are not automatically computed. Enter the exact values you wish to store.
                   </div>
                 </div>
+              ) : type === 'Fixed Deposit' ? (
+                // Fixed Deposit specific inputs
+                <div className="space-y-5">
+                  {/* Row 1: Principal Amount & Interest Rate */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Principal Amount (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={fdPrincipalAmount}
+                        onChange={(e) => setFdPrincipalAmount(e.target.value)}
+                        placeholder="e.g. 50000"
+                        className={inputClass(errors.fdPrincipalAmount)}
+                      />
+                      {errors.fdPrincipalAmount && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.fdPrincipalAmount}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Interest Rate (% p.a.)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={fdInterestRate}
+                        onChange={(e) => setFdInterestRate(e.target.value)}
+                        placeholder="e.g. 7.10"
+                        className={inputClass(errors.fdInterestRate)}
+                      />
+                      {errors.fdInterestRate && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.fdInterestRate}</p>}
+                    </div>
+                  </div>
+
+                  {/* Row 2: Tenure (Years, Months, Days) */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      Tenure *
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          value={fdTenureYears}
+                          onChange={(e) => setFdTenureYears(e.target.value)}
+                          placeholder="Years"
+                          className={inputClass(errors.fdTenure)}
+                        />
+                        <span className="block text-[9px] font-bold text-slate-400 mt-1 uppercase text-center">Years</span>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          value={fdTenureMonths}
+                          onChange={(e) => setFdTenureMonths(e.target.value)}
+                          placeholder="Months"
+                          className={inputClass(errors.fdTenure)}
+                        />
+                        <span className="block text-[9px] font-bold text-slate-400 mt-1 uppercase text-center">Months</span>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          value={fdTenureDays}
+                          onChange={(e) => setFdTenureDays(e.target.value)}
+                          placeholder="Days"
+                          className={inputClass(errors.fdTenure)}
+                        />
+                        <span className="block text-[9px] font-bold text-slate-400 mt-1 uppercase text-center">Days</span>
+                      </div>
+                    </div>
+                    {errors.fdTenure && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.fdTenure}</p>}
+                  </div>
+
+                  {/* Row 3: Maturity Amount & Maturity Date */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Maturity Amount (₹) (Optional)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={fdMaturityAmount}
+                        onChange={(e) => setFdMaturityAmount(e.target.value)}
+                        placeholder="e.g. 55500"
+                        className={inputClass()}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                        Maturity Date
+                      </label>
+                      <input
+                        type="date"
+                        value={fdMaturityDate}
+                        onChange={(e) => setFdMaturityDate(e.target.value)}
+                        className={inputClass(errors.fdMaturityDate)}
+                      />
+                      {errors.fdMaturityDate && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.fdMaturityDate}</p>}
+                    </div>
+                  </div>
+
+                  {/* Compounding Frequency dropdown */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      Compounding Frequency
+                    </label>
+                    <select
+                      value={fdCompoundingFrequency}
+                      onChange={(e) => setFdCompoundingFrequency(e.target.value as any)}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2.5 px-3.5 text-sm outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17] font-semibold"
+                    >
+                      <option value="Monthly" className="dark:bg-[#0d0f17]">Monthly</option>
+                      <option value="Quarterly" className="dark:bg-[#0d0f17]">Quarterly</option>
+                      <option value="Half-Yearly" className="dark:bg-[#0d0f17]">Half-Yearly</option>
+                      <option value="Yearly" className="dark:bg-[#0d0f17]">Yearly</option>
+                    </select>
+                  </div>
+                </div>
               ) : (
                 // Standard fields
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
                         Quantity / Units *
                       </label>
                       <input
@@ -1020,7 +1262,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
                         Buy Price / Price per Unit *
                       </label>
                       <input
@@ -1057,8 +1299,8 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           {/* ── Date fields ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                {isIPO ? '📅 Application Date *' : 'Buy Date *'}
+              <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
+                {isIPO ? '📅 Application Date *' : type === 'Fixed Deposit' ? 'Start / Deposit Date *' : 'Buy Date *'}
               </label>
               <input
                 type="date"

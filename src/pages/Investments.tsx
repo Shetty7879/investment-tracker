@@ -309,7 +309,7 @@ export const Investments: React.FC = () => {
                             {isIPORow
                               ? <span>{ipoAppliedLots} lot{ipoAppliedLots !== 1 ? 's' : ''}{ipoSharesPerLot > 0 ? ` × ${ipoSharesPerLot}` : ''}</span>
                               : isCommodityCategory(inv.category || inv.assetType)
-                                ? `${inv.weightGrams ?? inv.quantity} g`
+                                ? `${inv.weightGrams ?? inv.quantity} ${inv.weightUnit || 'g'}`
                                 : inv.quantity
                             }
                           </td>
@@ -319,7 +319,7 @@ export const Investments: React.FC = () => {
                             {isIPORow
                               ? ipoPriceDisplay
                               : isCommodityCategory(inv.category || inv.assetType)
-                                ? `${formatCurrency(inv.buyPricePerGram ?? inv.buyPrice ?? 0)}/g`
+                                ? `${formatCurrency(inv.buyPricePerGram ?? inv.buyPrice ?? 0)}/${inv.weightUnit || 'g'}`
                                 : formatCurrency(inv.buyPrice ?? 0)
                             }
                           </td>
@@ -513,18 +513,18 @@ export const Investments: React.FC = () => {
                         <>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">
-                              {inv.category === 'Mutual Funds' ? 'Units' : isCommodityCategory(inv.category || inv.assetType) ? 'Weight (grams)' : 'Quantity / Units'}
+                              {inv.category === 'Mutual Funds' ? 'Units' : isCommodityCategory(inv.category || inv.assetType) ? 'Weight' : 'Quantity / Units'}
                             </span>
                             <span className="font-extrabold text-slate-900 dark:text-white">
-                              {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} g` : inv.quantity}
+                              {isCommodityCategory(inv.category || inv.assetType) ? `${inv.weightGrams ?? inv.quantity} ${inv.weightUnit || 'g'}` : inv.quantity}
                             </span>
                           </div>
                           <div>
                             <span className="block text-[9px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider mb-0.5">
-                              {inv.category === 'Mutual Funds' ? 'NAV' : isCommodityCategory(inv.category || inv.assetType) ? 'Buy Price per Gram' : 'Buy Price / Price per Unit'}
+                              {inv.category === 'Mutual Funds' ? 'NAV' : isCommodityCategory(inv.category || inv.assetType) ? `Buy Price per ${inv.weightUnit === 'mg' ? 'Milligram' : 'Gram'}` : 'Buy Price / Price per Unit'}
                             </span>
                             <span className="font-extrabold text-slate-900 dark:text-white font-semibold">
-                              {isCommodityCategory(inv.category || inv.assetType) ? `${formatCurrency(inv.buyPricePerGram ?? inv.buyPrice ?? 0)}/g` : formatCurrency(inv.buyPrice ?? 0)}
+                              {isCommodityCategory(inv.category || inv.assetType) ? `${formatCurrency(inv.buyPricePerGram ?? inv.buyPrice ?? 0)}/${inv.weightUnit || 'g'}` : formatCurrency(inv.buyPrice ?? 0)}
                             </span>
                           </div>
                           <div>
