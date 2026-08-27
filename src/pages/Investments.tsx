@@ -3,6 +3,7 @@ import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import type { Investment } from '../types';
 import { InvestmentModal } from '../components/InvestmentModal';
+import { SplitModal } from '../components/SplitModal';
 import { isCommodityCategory } from '../services/portfolioCalculationService';
 import { getInvestmentAge } from '../utils/calculations';
 import {
@@ -45,10 +46,13 @@ export const Investments: React.FC = () => {
   // State Management
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [selectedSplitInvestment, setSelectedSplitInvestment] = useState<Investment | null>(null);
 
   // Filter & Sort States
   const [typeFilter, setTypeFilter] = useState<string>('All');
   const [sortOption, setSortOption] = useState<SortOptionType>('latest-investment');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Call shared portfolio calculations hook
   const { holdings } = usePortfolio();
@@ -70,11 +74,24 @@ export const Investments: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Filter holdings by type filter
+  const handleSplit = (inv: Investment) => {
+    setSelectedSplitInvestment(inv);
+    setIsSplitModalOpen(true);
+  };
+
+  // Filter holdings by type filter and search query
   const filteredInvestments = holdings.filter(inv => {
     const mappedType = REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
     const matchesType = typeFilter === 'All' || mappedType === typeFilter;
-    return matchesType;
+    
+    const query = searchQuery.trim().toLowerCase();
+    const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || '');
+    const matchesSearch = !query || 
+      inv.assetName.toLowerCase().includes(query) ||
+      (inv.symbol && inv.symbol.toLowerCase().includes(query)) ||
+      broker.toLowerCase().includes(query);
+      
+    return matchesType && matchesSearch;
   });
 
   // Sort holdings
@@ -142,66 +159,70 @@ export const Investments: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-
-          {/* Filters & Sorters Controls */}
-          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-[#0d0f17] p-4 border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm">
-
-            {/* Asset Type Filter */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 mr-2 flex items-center gap-1">
-                <Filter className="h-3 w-3" /> Categories
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {[
-                  { label: 'All', value: 'All' },
-                  { label: 'Stock', value: 'Stock' },
-                  { label: 'ETF', value: 'ETF' },
-                  { label: 'Mutual Fund', value: 'Mutual Fund' },
-                  { label: 'IPO', value: 'IPO' },
-                  { label: 'Digital Gold', value: 'Digital Gold' },
-                  { label: 'Digital Silver', value: 'Digital Silver' },
-                  { label: 'Digital Platinum', value: 'Digital Platinum' },
-                  { label: 'Crypto', value: 'Crypto' },
-                  { label: 'Fixed Deposit', value: 'Fixed Deposit' },
-                  { label: 'Bond', value: 'Bond' },
-                  { label: 'Other', value: 'Other' }
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setTypeFilter(opt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
-                      typeFilter === opt.value
-                        ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-indigo-50/40 dark:hover:bg-slate-800/50 hover:text-indigo-650 dark:hover:text-indigo-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+        <div className="space-y-4">          {/* Search & Sorter Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#0d0f17] p-4 border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm">
+            {/* Search Input */}
+            <div className="relative w-full md:w-80 font-semibold">
+              <input
+                type="text"
+                placeholder="Search by name, symbol, or broker..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17] placeholder-slate-400 dark:placeholder-slate-550"
+              />
+              <span className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-550 text-xs">🔍</span>
             </div>
 
-            {/* Sorters and Global States */}
-            <div className="flex flex-wrap items-center gap-3 font-semibold">
+            {/* Sorter */}
+            <div className="flex items-center gap-2 font-semibold">
+              <span className="text-[10px] uppercase font-bold text-slate-405 dark:text-slate-555 flex items-center gap-1">
+                <ArrowUpDown className="h-3 w-3" /> Sort
+              </span>
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOptionType)}
+                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2 px-3 text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17]"
+              >
+                <option value="latest-investment">Latest Investment</option>
+                <option value="highest-value">Highest Invested</option>
+                <option value="lowest-value">Lowest Invested</option>
+                <option value="alphabetical">Alphabetical</option>
+              </select>
+            </div>
+          </div>
 
-              {/* Sorter */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-slate-405 dark:text-slate-555 flex items-center gap-1">
-                  <ArrowUpDown className="h-3 w-3" /> Sort
-                </span>
-                <select
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value as SortOptionType)}
-                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2 px-3 text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17]"
+          {/* Asset Type Filter Category Buttons Row */}
+          <div className="bg-white dark:bg-[#0d0f17] p-4 border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 mr-2 flex items-center gap-1">
+              <Filter className="h-3 w-3" /> Categories
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {[
+                { label: 'All', value: 'All' },
+                { label: 'Stock', value: 'Stock' },
+                { label: 'ETF', value: 'ETF' },
+                { label: 'Mutual Fund', value: 'Mutual Fund' },
+                { label: 'IPO', value: 'IPO' },
+                { label: 'Digital Gold', value: 'Digital Gold' },
+                { label: 'Digital Silver', value: 'Digital Silver' },
+                { label: 'Digital Platinum', value: 'Digital Platinum' },
+                { label: 'Crypto', value: 'Crypto' },
+                { label: 'Fixed Deposit', value: 'Fixed Deposit' },
+                { label: 'Bond', value: 'Bond' },
+                { label: 'Other', value: 'Other' }
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setTypeFilter(opt.value)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                    typeFilter === opt.value
+                      ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-405 hover:bg-indigo-50/40 dark:hover:bg-slate-800/50 hover:text-indigo-650 dark:hover:text-indigo-400'
+                  }`}
                 >
-                  <option value="latest-investment">Latest Investment</option>
-                  <option value="highest-value">Highest Invested</option>
-                  <option value="lowest-value">Lowest Invested</option>
-                  <option value="alphabetical">Alphabetical</option>
-                </select>
-              </div>
-
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -238,6 +259,7 @@ export const Investments: React.FC = () => {
                       const brokerLabel = inv.broker === 'Other' && inv.customBroker
                         ? inv.customBroker
                         : inv.broker || 'Other';
+                      const isStockOrETF = displayType === 'Stock' || displayType === 'ETF';
 
                       // IPO-specific derived values
                       const ipoStatus = inv.allotmentStatus || (inv.ipoAllotmentStatus as string) || 'Applied';
@@ -363,6 +385,15 @@ export const Investments: React.FC = () => {
                           {/* Actions */}
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center justify-center gap-3">
+                              {isStockOrETF && (
+                                <button
+                                  onClick={() => handleSplit(inv)}
+                                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer font-bold text-[10px]"
+                                  title="Record Split"
+                                >
+                                  Split
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleEdit(inv)}
                                 className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
@@ -403,6 +434,7 @@ export const Investments: React.FC = () => {
                 const brokerLabel = inv.broker === 'Other' && inv.customBroker
                   ? inv.customBroker
                   : inv.broker || 'Other';
+                const isStockOrETF = displayType === 'Stock' || displayType === 'ETF';
 
                 const ipoStatus = inv.allotmentStatus || (inv.ipoAllotmentStatus as string) || 'Applied';
                 const ipoAppliedLots = inv.appliedLots ?? inv.ipoLotsApplied ?? 0;
@@ -466,6 +498,11 @@ export const Investments: React.FC = () => {
                       </div>
 
                       <div className="flex gap-1.5">
+                        {isStockOrETF && (
+                          <button onClick={() => handleSplit(inv)} className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer font-bold text-[10px]">
+                            Split
+                          </button>
+                        )}
                         <button onClick={() => handleEdit(inv)} className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
@@ -562,6 +599,13 @@ export const Investments: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         investmentToEdit={editingInvestment}
+      />
+
+      {/* Split Modal */}
+      <SplitModal
+        isOpen={isSplitModalOpen}
+        onClose={() => setIsSplitModalOpen(false)}
+        investment={selectedSplitInvestment}
       />
     </div>
   );

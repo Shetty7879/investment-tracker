@@ -260,6 +260,15 @@ export const calculateHoldingMetrics = (
       realizedPL += (tx.amount - tx.charges);
     } else if (tx.type === 'CHARGE') {
       realizedPL -= (tx.amount + tx.charges);
+    } else if (tx.type === 'SPLIT') {
+      const ratioParts = (tx.ratio || '1:1').split(':');
+      const oldRatio = parseFloat(ratioParts[0]) || 1;
+      const newRatio = parseFloat(ratioParts[1]) || 1;
+      if (oldRatio > 0 && newRatio > 0) {
+        currentQuantity = currentQuantity * (newRatio / oldRatio);
+        averageBuyPrice = averageBuyPrice * (oldRatio / newRatio);
+        totalInvestedCost = currentQuantity * averageBuyPrice;
+      }
     }
   });
 
@@ -547,22 +556,39 @@ export const calculateMonthlyInvestments = (
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
+  const allEffectiveTxs: Transaction[] = [];
+  calculatedHoldings.forEach(h => {
+    const parentTxs = transactions.filter(tx => tx.investmentId === h.id);
+    const effTxs = getEffectiveTransactions(h as any, parentTxs);
+    allEffectiveTxs.push(...effTxs);
+  });
+
   return monthNames.map((name, index) => {
-    const totalForMonth = transactions.reduce((sum, tx) => {
-      // Skip demo/fake transactions generated for empty holdings
+    const totalForMonth = allEffectiveTxs.reduce((sum, tx) => {
       if ((tx as any).isDemo) return sum;
       const pDate = new Date(tx.date);
       if (!isNaN(pDate.getTime()) && pDate.getMonth() === index && pDate.getFullYear() === year) {
         const parent = calculatedHoldings.find(h => h.id === tx.investmentId);
-        // Exclude unallotted IPO buy transactions (Applied, Not Allotted, Refund Pending, etc.)
-        if (parent && parent.category === 'IPOs') {
-          const status = parent.ipoAllotmentStatus || 'Applied';
+        if (!parent) return sum;
+
+        const cat = parent.category || parent.assetType || '';
+        if (cat === 'IPOs' || cat === 'IPO') {
+          const status = parent.ipoAllotmentStatus || parent.allotmentStatus || 'Applied';
           const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
           if (!isAllotted) return sum;
         }
 
         if (tx.type === 'BUY') {
-          return sum + ((tx.amount ?? (tx.quantity * tx.price)) + tx.charges);
+          let txAmount = 0;
+          if (cat === 'Mutual Funds') {
+            txAmount = getMutualFundTransactionMetrics(tx, parent).amount;
+          } else if (isCommodityCategory(cat)) {
+            const amt = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount as any);
+            txAmount = isNaN(amt) ? 0 : amt;
+          } else {
+            txAmount = tx.amount ?? (tx.quantity * tx.price);
+          }
+          return sum + txAmount + (tx.charges ?? 0);
         }
       }
       return sum;

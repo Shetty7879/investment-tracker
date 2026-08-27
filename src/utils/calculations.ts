@@ -260,6 +260,15 @@ export const calculateInvestmentMetrics = (
           averageBuyPrice = 0;
         }
       }
+    } else if (tx.type === 'SPLIT') {
+      const ratioParts = (tx.ratio || '1:1').split(':');
+      const oldRatio = parseFloat(ratioParts[0]) || 1;
+      const newRatio = parseFloat(ratioParts[1]) || 1;
+      if (oldRatio > 0 && newRatio > 0) {
+        currentQuantity = currentQuantity * (newRatio / oldRatio);
+        averageBuyPrice = averageBuyPrice * (oldRatio / newRatio);
+        totalInvested = currentQuantity * averageBuyPrice;
+      }
     }
   });
 

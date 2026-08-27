@@ -5,12 +5,13 @@ import {
   Briefcase,
   Plus,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Calendar
 } from 'lucide-react';
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
 import { getAssetTypeBadgeStyle, getBrokerBadgeStyle } from '../utils/badgeStyles';
-import { isCommodityCategory } from '../services/portfolioCalculationService';
+import { isCommodityCategory, calculateMonthlyInvestments } from '../services/portfolioCalculationService';
 
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
@@ -39,19 +40,44 @@ export const Dashboard: React.FC = () => {
   const [isMoneyModalOpen, setIsMoneyModalOpen] = useState(false);
 
   // Invoke shared calculation hook
-  const { holdings } = usePortfolio();
+  const { holdings, portfolioTotal, transactions } = usePortfolio();
 
   // Calculate basic details: Number of Investments
   const numberOfInvestments = holdings.length;
+  const totalInvestedAmount = portfolioTotal.totalInvested;
 
-  const totalInvestedAmount = holdings.reduce((sum, h) => sum + (h.investedAmount ?? 0), 0);
+  // Monthly Invested Calculation
+  const currentYear = new Date().getFullYear();
+  const currentMonthIdx = new Date().getMonth();
+  const monthlyData = calculateMonthlyInvestments(transactions, holdings, currentYear, 0);
+  const monthlyInvestedAmount = monthlyData[currentMonthIdx]?.actual ?? 0;
 
   // Filter and sort for Recent Investments (top 5 sorted by buy date / purchase date)
   const recentInvestments = [...holdings]
     .sort((a, b) => new Date(b.buyDate || b.purchaseDate || 0).getTime() - new Date(a.buyDate || a.purchaseDate || 0).getTime())
     .slice(0, 5);
 
+  const getInvestmentStatus = (inv: any): string => {
+    const cat = inv.category || inv.assetType || '';
+    if (cat === 'IPOs' || cat === 'IPO') {
+      return inv.allotmentStatus || inv.ipoAllotmentStatus || 'Applied';
+    }
+    return (inv.quantity ?? 0) > 0 ? 'Active' : 'Sold';
+  };
 
+  const renderStatusBadge = (status: string) => {
+    let colorClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25';
+    if (status === 'Applied' || status === 'Partially Allotted') {
+      colorClass = 'bg-amber-500/10 text-amber-500 border-amber-500/25';
+    } else if (status === 'Sold' || status === 'Not Allotted' || status === 'Withdrawn') {
+      colorClass = 'bg-rose-500/10 text-rose-500 border-rose-500/25';
+    }
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${colorClass}`}>
+        {status}
+      </span>
+    );
+  };
 
   // Filter money tracker records to show real data only
   const filteredMoneyRecords = moneyRecords.filter(r => !r.isDemo);
@@ -111,75 +137,63 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Total Amount Invested */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default animate-fade-in">
-          <div className="w-full">
-            <div className="flex items-center justify-between text-slate-405 dark:text-slate-550 text-[10px] font-bold uppercase tracking-wider mb-2">
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200/80 dark:border-slate-800/60 rounded-2xl p-8 shadow-sm flex flex-col justify-between min-h-[190px] hover:border-indigo-500/30 dark:hover:border-indigo-500/30 hover:shadow-md transition-all duration-300 group cursor-default animate-fade-in animate-duration-300">
+          <div className="w-full flex flex-col justify-between h-full gap-y-6">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs md:text-sm font-semibold uppercase tracking-wider">
               <span>TOTAL AMOUNT INVESTED</span>
-              <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors flex-shrink-0">
-                <Briefcase className="h-4 w-4 text-slate-405 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
+              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/40 group-hover:border-indigo-500/20 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-all flex-shrink-0">
+                <Briefcase className="h-4 w-4 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors" />
               </div>
             </div>
-            <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-none tracking-tight mb-4">
-              {formatCurrency(totalInvestedAmount)}
-            </div>
-            <div className="text-xs text-slate-405 dark:text-slate-550 mt-3 font-medium">
-              Total capital invested across all investments
+            <div>
+              <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-50 leading-none tracking-tight">
+                {formatCurrency(totalInvestedAmount)}
+              </div>
+              <div className="text-sm md:text-[15px] text-slate-500 dark:text-slate-405/90 font-medium mt-2">
+                Total capital deployed
+              </div>
             </div>
           </div>
         </div>
 
         {/* Active Investments */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
-          <div className="flex items-center justify-between text-slate-405 dark:text-slate-555 text-[10px] font-bold uppercase tracking-wider mb-2">
-            <span>📦 Active Investments</span>
-            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
-              <ArrowUpRight className="h-4.5 w-4.5 text-slate-400 dark:text-slate-655 group-hover:text-indigo-500 transition-colors" />
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200/80 dark:border-slate-800/60 rounded-2xl p-8 shadow-sm flex flex-col justify-between min-h-[190px] hover:border-indigo-500/30 dark:hover:border-indigo-500/30 hover:shadow-md transition-all duration-300 group cursor-default">
+          <div className="w-full flex flex-col justify-between h-full gap-y-6">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs md:text-sm font-semibold uppercase tracking-wider">
+              <span>📦 Active Investments</span>
+              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/40 group-hover:border-indigo-500/20 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-all flex-shrink-0">
+                <ArrowUpRight className="h-4 w-4 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors" />
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-none tracking-tight">
-              {numberOfInvestments}
-            </div>
-            <div className="text-xs text-slate-405 dark:text-slate-550 mt-3 font-medium">
-              Investments in your portfolio
-            </div>
-          </div>
-        </div>
-
-        {/* Money to Receive */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
-          <div className="flex items-center justify-between text-slate-405 dark:text-slate-555 text-[10px] font-bold uppercase tracking-wider mb-2">
-            <span>💰 Money to Receive</span>
-            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
-              <ArrowDownRight className="h-4.5 w-4.5 text-slate-400 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
-            </div>
-          </div>
-          <div>
-            <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-none tracking-tight">
-              {formatCurrency(totalToReceive)}
-            </div>
-            <div className="text-xs text-slate-405 dark:text-slate-550 mt-3 font-medium">
-              People who owe you
+            <div>
+              <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-50 leading-none tracking-tight">
+                {numberOfInvestments}
+              </div>
+              <div className="text-sm md:text-[15px] text-slate-500 dark:text-slate-405/90 font-medium mt-2">
+                Holdings in your portfolio
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Money to Give */}
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px] hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 group cursor-default">
-          <div className="flex items-center justify-between text-slate-405 dark:text-slate-555 text-[10px] font-bold uppercase tracking-wider mb-2">
-            <span>💸 Money to Give</span>
-            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-colors">
-              <ArrowUpRight className="h-4.5 w-4.5 text-slate-400 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
+        {/* Monthly Invested */}
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200/80 dark:border-slate-800/60 rounded-2xl p-8 shadow-sm flex flex-col justify-between min-h-[190px] hover:border-indigo-500/30 dark:hover:border-indigo-500/30 hover:shadow-md transition-all duration-300 group cursor-default animate-fade-in animate-duration-300">
+          <div className="w-full flex flex-col justify-between h-full gap-y-6">
+            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs md:text-sm font-semibold uppercase tracking-wider">
+              <span>📅 Monthly Invested</span>
+              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800/40 group-hover:border-indigo-500/20 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-950/20 group-hover:text-indigo-500 transition-all flex-shrink-0">
+                <Calendar className="h-4 w-4 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors" />
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-3xl font-extrabold text-slate-900 dark:text-white leading-none tracking-tight">
-              {formatCurrency(totalToGive)}
-            </div>
-            <div className="text-xs text-slate-405 dark:text-slate-550 mt-3 font-medium">
-              Payments you need to make
+            <div>
+              <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-50 leading-none tracking-tight">
+                {formatCurrency(monthlyInvestedAmount)}
+              </div>
+              <div className="text-sm md:text-[15px] text-slate-500 dark:text-slate-405/90 font-medium mt-2">
+                Invested this month
+              </div>
             </div>
           </div>
         </div>
@@ -192,7 +206,7 @@ export const Dashboard: React.FC = () => {
             <h3 className="text-sm font-bold text-slate-900 dark:text-white m-0">
               📋 Recent Investments
             </h3>
-            <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5 mb-0 font-medium">
+            <p className="text-xs text-slate-400 dark:text-slate-555 mt-0.5 mb-0 font-medium">
               Your latest investment records.
             </p>
           </div>
@@ -215,7 +229,7 @@ export const Dashboard: React.FC = () => {
             </p>
             <button
               onClick={() => setIsAssetModalOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/10 cursor-pointer active:scale-95"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-600/10 cursor-pointer active:scale-95"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>+ Add Investment</span>
@@ -234,12 +248,14 @@ export const Dashboard: React.FC = () => {
                     <th className="px-4 py-3 text-right">Quantity</th>
                     <th className="px-4 py-3 text-right">Invested Amount</th>
                     <th className="px-4 py-3 text-center">Date</th>
+                    <th className="px-4 py-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
                   {recentInvestments.map(inv => {
                     const displayType = REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
                     const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other');
+                    const status = getInvestmentStatus(inv);
                     return (
                       <tr
                         key={inv.id}
@@ -274,6 +290,9 @@ export const Dashboard: React.FC = () => {
                         <td className="px-4 py-3.5 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
                           {inv.buyDate || inv.purchaseDate || '—'}
                         </td>
+                        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                          {renderStatusBadge(status)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -286,6 +305,7 @@ export const Dashboard: React.FC = () => {
               {recentInvestments.map(inv => {
                 const displayType = REVERSE_TYPE_MAPPING[inv.category] || REVERSE_TYPE_MAPPING[inv.assetType] || 'Other';
                 const broker = inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other');
+                const status = getInvestmentStatus(inv);
                 return (
                   <div
                     key={inv.id}
@@ -296,19 +316,22 @@ export const Dashboard: React.FC = () => {
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0">
                           {inv.assetName}
                         </h4>
-                        <span className="block text-[10px] text-slate-400 dark:text-slate-550 mt-0.5">{inv.buyDate}</span>
+                        <span className="block text-[10px] text-slate-405 dark:text-slate-550 mt-0.5">{inv.buyDate}</span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getAssetTypeBadgeStyle(displayType)}`}>
-                        {displayType}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {renderStatusBadge(status)}
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getAssetTypeBadgeStyle(displayType)}`}>
+                          {displayType}
+                        </span>
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-105 dark:border-slate-800 text-[10px]">
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Platform</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-slate-450 mb-0.5">Platform</span>
                         <span className="font-bold text-slate-850 dark:text-slate-200">{broker}</span>
                       </div>
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">
+                        <span className="block text-[8px] uppercase tracking-wider text-slate-450 mb-0.5">
                           {isCommodityCategory(inv.category || inv.assetType) ? 'Weight' : 'Quantity'}
                         </span>
                         <span className="font-bold text-slate-855 dark:text-slate-200">
@@ -316,7 +339,7 @@ export const Dashboard: React.FC = () => {
                         </span>
                       </div>
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Invested</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-slate-450 mb-0.5">Invested</span>
                         <span className="font-extrabold text-indigo-650 dark:text-indigo-400">{formatCurrency(inv.investedAmount)}</span>
                       </div>
                     </div>

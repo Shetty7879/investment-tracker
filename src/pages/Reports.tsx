@@ -84,6 +84,13 @@ export const Reports: React.FC = () => {
     totalCurrent
   } = portfolioTotal;
 
+  const formatYAxis = (value: number) => {
+    if (value >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
+    if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
+    if (value >= 1000) return `₹${(value / 1000).toFixed(0)}k`;
+    return `₹${value}`;
+  };
+
 
 
   // Chart 1: Donut Asset Allocation (current value weights)
@@ -444,10 +451,10 @@ export const Reports: React.FC = () => {
               <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-500">No monthly savings entries logged.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2230" opacity={0.1} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatYAxis} />
                   <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }} />
                   <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
                 </BarChart>
@@ -471,10 +478,10 @@ export const Reports: React.FC = () => {
               <div className="h-full flex items-center justify-center text-xs text-slate-400 dark:text-slate-555">Add holdings or demo data to view line chart curve.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={lineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={lineChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2230" opacity={0.1} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatYAxis} />
                   <Tooltip content={<CustomLineTooltip />} />
                   <Line type="monotone" dataKey="Invested" stroke="#64748b" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="Current" stroke="#6366f1" strokeWidth={2} dot={false} />
@@ -529,25 +536,40 @@ export const Reports: React.FC = () => {
                         <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{category}</td>
                         <td className="px-4 py-3 text-center whitespace-nowrap">
                           <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                            tx.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+                            tx.type === 'BUY'
+                              ? 'bg-emerald-500/10 text-emerald-500'
+                              : tx.type === 'SPLIT'
+                                ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400'
+                                : 'bg-rose-500/10 text-rose-500'
                           }`}>
-                            {tx.type}
+                            {tx.type === 'SPLIT' ? `SPLIT (${tx.ratio || '1:1'})` : tx.type}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                          {parent && isCommodityCategory(parent.category || parent.assetType) ? `${tx.quantity} g` : tx.quantity}
+                          {tx.type === 'SPLIT'
+                            ? `${tx.oldQuantity} ➔ ${tx.newQuantity}`
+                            : parent && isCommodityCategory(parent.category || parent.assetType) ? `${tx.quantity} g` : tx.quantity
+                          }
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                          {parent && isCommodityCategory(parent.category || parent.assetType) ? `${formatCurrency(tx.price)}/g` : formatCurrency(tx.price)}
+                          {tx.type === 'SPLIT'
+                            ? `${formatCurrency(tx.oldPrice ?? 0)} ➔ ${formatCurrency(tx.newPrice ?? 0)}`
+                            : parent && isCommodityCategory(parent.category || parent.assetType) ? `${formatCurrency(tx.price)}/g` : formatCurrency(tx.price)
+                          }
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatCurrency(tx.charges || 0)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {tx.type === 'SPLIT' ? '—' : formatCurrency(tx.charges || 0)}
+                        </td>
                         <td className="px-6 py-3 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap font-extrabold">
-                          {formatCurrency(parent
-                            ? isCommodityCategory(parent.category || parent.assetType)
-                              ? (tx.amount ?? parent.investedAmount ?? 0)
-                              : getMutualFundTransactionMetrics(tx, parent).amount
-                            : (tx.amount ?? (tx.quantity * tx.price))
-                          )}
+                          {tx.type === 'SPLIT'
+                            ? '—'
+                            : formatCurrency(parent
+                                ? isCommodityCategory(parent.category || parent.assetType)
+                                  ? (tx.amount ?? parent.investedAmount ?? 0)
+                                  : getMutualFundTransactionMetrics(tx, parent).amount
+                                : (tx.amount ?? (tx.quantity * tx.price))
+                              )
+                          }
                         </td>
                       </tr>
                     );

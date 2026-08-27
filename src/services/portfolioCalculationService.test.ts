@@ -1340,5 +1340,190 @@ describe('Portfolio Calculation Service Unit Tests', () => {
     const overallAmount = group.reduce((sum, h) => sum + (h.investedAmount ?? 0), 0);
     expect(overallAmount).toBe(8000); // 5000 + 3000
   });
+
+  test('Stock/ETF split calculation and cost basis preservation', () => {
+    const stockInv: Investment = {
+      id: 'stock-split-1',
+      assetName: 'TCS',
+      category: 'Stocks',
+      assetType: 'Stocks',
+      quantity: 10,
+      buyPrice: 1000,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+
+    const txs: Transaction[] = [
+      {
+        id: 'tx-buy-1',
+        investmentId: 'stock-split-1',
+        type: 'BUY',
+        quantity: 10,
+        price: 1000,
+        amount: 10000,
+        charges: 0,
+        date: '2026-01-01',
+        isDemo: false,
+        createdAt: ''
+      },
+      {
+        id: 'tx-split-1',
+        investmentId: 'stock-split-1',
+        type: 'SPLIT',
+        quantity: 20,
+        price: 500,
+        amount: 0,
+        charges: 0,
+        date: '2026-02-01',
+        ratio: '1:2',
+        oldQuantity: 10,
+        newQuantity: 20,
+        oldPrice: 1000,
+        newPrice: 500,
+        isDemo: false,
+        createdAt: ''
+      }
+    ];
+
+    const metrics = calculateHoldingMetrics(stockInv, txs, {});
+
+    expect(metrics.quantity).toBe(20);
+    expect(metrics.buyPrice).toBe(500);
+    expect(metrics.investedAmount).toBe(10000); // 20 * 500 = 10000, cost basis remains unchanged
+  });
+
+  test('Multiple splits on the same stock/ETF holding', () => {
+    const stockInv: Investment = {
+      id: 'stock-split-multi',
+      assetName: 'TCS Multi',
+      category: 'Stocks',
+      assetType: 'Stocks',
+      quantity: 100,
+      buyPrice: 1000,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+
+    const txs: Transaction[] = [
+      {
+        id: 'tx-buy-1',
+        investmentId: 'stock-split-multi',
+        type: 'BUY',
+        quantity: 100,
+        price: 1000,
+        amount: 100000,
+        charges: 0,
+        date: '2026-01-01',
+        isDemo: false,
+        createdAt: ''
+      },
+      {
+        id: 'tx-split-1',
+        investmentId: 'stock-split-multi',
+        type: 'SPLIT',
+        quantity: 200,
+        price: 500,
+        amount: 0,
+        charges: 0,
+        date: '2026-02-01',
+        ratio: '1:2',
+        oldQuantity: 100,
+        newQuantity: 200,
+        oldPrice: 1000,
+        newPrice: 500,
+        isDemo: false,
+        createdAt: ''
+      },
+      {
+        id: 'tx-split-2',
+        investmentId: 'stock-split-multi',
+        type: 'SPLIT',
+        quantity: 400,
+        price: 250,
+        amount: 0,
+        charges: 0,
+        date: '2026-03-01',
+        ratio: '1:2',
+        oldQuantity: 200,
+        newQuantity: 400,
+        oldPrice: 500,
+        newPrice: 250,
+        isDemo: false,
+        createdAt: ''
+      }
+    ];
+
+    const metrics = calculateHoldingMetrics(stockInv, txs, {});
+
+    expect(metrics.quantity).toBe(400);
+    expect(metrics.buyPrice).toBe(250);
+    expect(metrics.investedAmount).toBe(100000); // Cost basis remains 100k
+  });
+
+  test('Fractional shares split support', () => {
+    const etfInv: Investment = {
+      id: 'etf-split-fractional',
+      assetName: 'Gold ETF',
+      category: 'ETFs',
+      assetType: 'ETFs',
+      quantity: 5,
+      buyPrice: 1000,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+
+    const txs: Transaction[] = [
+      {
+        id: 'tx-buy-1',
+        investmentId: 'etf-split-fractional',
+        type: 'BUY',
+        quantity: 5,
+        price: 1000,
+        amount: 5000,
+        charges: 0,
+        date: '2026-01-01',
+        isDemo: false,
+        createdAt: ''
+      },
+      {
+        id: 'tx-split-1',
+        investmentId: 'etf-split-fractional',
+        type: 'SPLIT',
+        quantity: 7.5,
+        price: 666.6667,
+        amount: 0,
+        charges: 0,
+        date: '2026-02-01',
+        ratio: '2:3',
+        oldQuantity: 5,
+        newQuantity: 7.5,
+        oldPrice: 1000,
+        newPrice: 666.6667,
+        isDemo: false,
+        createdAt: ''
+      }
+    ];
+
+    const metrics = calculateHoldingMetrics(etfInv, txs, {});
+
+    expect(metrics.quantity).toBe(7.5);
+    expect(metrics.buyPrice).toBeCloseTo(666.67, 2);
+    expect(metrics.investedAmount).toBeCloseTo(5000, 2);
+  });
 });
 

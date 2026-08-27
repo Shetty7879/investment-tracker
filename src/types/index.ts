@@ -33,7 +33,7 @@ export type BrokerType =
 export interface Transaction {
   id: string;
   investmentId: string;
-  type: 'BUY' | 'SELL' | 'DIVIDEND' | 'INTEREST' | 'CHARGE';
+  type: 'BUY' | 'SELL' | 'DIVIDEND' | 'INTEREST' | 'CHARGE' | 'SPLIT';
   quantity: number;
   price: number;
   amount: number;
@@ -42,6 +42,12 @@ export interface Transaction {
   notes?: string;
   isDemo: boolean;
   createdAt: string;
+  // Split specific properties
+  ratio?: string; // e.g. "1:2"
+  oldQuantity?: number;
+  newQuantity?: number;
+  oldPrice?: number;
+  newPrice?: number;
 }
 
 export interface Investment {

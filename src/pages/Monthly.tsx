@@ -231,13 +231,29 @@ export const Monthly: React.FC = () => {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2230" opacity={0.1} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }} />
+                <XAxis 
+                  dataKey="month" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+                  tickFormatter={val => val.substring(0, 3)}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+                  tickFormatter={(val) => {
+                    if (val >= 10000000) return `₹${(val / 10000000).toFixed(1)}Cr`;
+                    if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+                    if (val >= 1000) return `₹${(val / 1000).toFixed(0)}k`;
+                    return `₹${val}`;
+                  }}
+                />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }} />
                 {monthlyTarget > 0 && (
-                  <ReferenceLine y={monthlyTarget} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target', position: 'right', fill: '#10b981' }} />
+                  <ReferenceLine y={monthlyTarget} stroke="#10b981" strokeDasharray="3 3" label={{ value: 'Target', position: 'right', fill: '#10b981', fontSize: 10 }} />
                 )}
                 <Bar dataKey="actual" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
