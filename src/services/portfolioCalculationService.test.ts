@@ -1086,7 +1086,7 @@ describe('Portfolio Calculation Service Unit Tests', () => {
     const rawCache: Record<string, MarketPriceData> = {
       'gmrairport.ns': {
         price: 82.10,
-        timestamp: Date.now() - 10000,
+        timestamp: Date.now() - (11 * 60 * 1000), // 11 mins ago
         source: 'Yahoo Finance API',
         marketState: 'open',
         status: 'live'
@@ -1195,4 +1195,150 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       vi.useRealTimers();
     }
   });
+
+  test('Digital Silver with manual investedAmount', () => {
+    const silverInv: Investment = {
+      id: 'silver-1',
+      assetName: 'Digital Silver test',
+      category: 'Digital Silver',
+      assetType: 'Digital Silver',
+      quantity: 50,
+      buyPrice: 80,
+      investedAmount: 3500,
+      currentValue: 3900,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+    const metrics = calculateHoldingMetrics(silverInv, [], {});
+    expect(metrics.investedAmount).toBe(3500);
+    expect(metrics.currentValue).toBe(3900);
+  });
+
+  test('Digital Platinum with manual investedAmount', () => {
+    const platInv: Investment = {
+      id: 'plat-1',
+      assetName: 'Digital Platinum test',
+      category: 'Digital Platinum',
+      assetType: 'Digital Platinum',
+      quantity: 2,
+      buyPrice: 3200,
+      investedAmount: 6000,
+      currentValue: 6200,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+    const metrics = calculateHoldingMetrics(platInv, [], {});
+    expect(metrics.investedAmount).toBe(6000);
+    expect(metrics.currentValue).toBe(6200);
+  });
+
+  test('Commodity amount NOT being calculated from grams × price', () => {
+    const goldInv: Investment = {
+      id: 'gold-2',
+      assetName: 'Digital Gold Multiplier check',
+      category: 'Digital Gold',
+      assetType: 'Digital Gold',
+      quantity: 5,
+      buyPrice: 7000,
+      investedAmount: 5000,
+      currentValue: 4800,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    };
+    const metrics = calculateHoldingMetrics(goldInv, [], {});
+    expect(metrics.investedAmount).toBe(5000); // Stored manual amount, not 5 * 7000 = 35000
+    expect(metrics.investedAmount).not.toBe(35000);
+  });
+
+  test('Commodity active/inactive checks and consolidation simulations', () => {
+    // Helper mimic of Portfolio page active filter
+    const isHoldingActiveSim = (h: any): boolean => {
+      const category = h.category || h.assetType || '';
+      if (category === 'Gold' || category === 'Digital Gold' || category === 'Silver' || category === 'Digital Silver' || category === 'Platinum' || category === 'Digital Platinum') {
+        const hasWeight = h.quantity > 0;
+        const hasInvested = (h.investedAmount ?? 0) > 0;
+        const hasCurrent = (h.currentValue ?? 0) > 0;
+        return hasWeight || hasInvested || hasCurrent;
+      }
+      return h.quantity > 0;
+    };
+
+    const activeGold = calculateHoldingMetrics({
+      id: 'gold-active',
+      assetName: 'Active Gold',
+      category: 'Digital Gold',
+      assetType: 'Digital Gold',
+      quantity: 5,
+      buyPrice: 7000,
+      investedAmount: 5000,
+      currentValue: 4800,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    }, [], {});
+
+    const inactiveGold = calculateHoldingMetrics({
+      id: 'gold-inactive',
+      assetName: 'Inactive Gold',
+      category: 'Digital Gold',
+      assetType: 'Digital Gold',
+      quantity: 0,
+      buyPrice: 7000,
+      investedAmount: 0,
+      currentValue: 0,
+      buyDate: '2026-01-01',
+      purchaseDate: '2026-01-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    }, [], {});
+
+    expect(isHoldingActiveSim(activeGold)).toBe(true);
+    expect(isHoldingActiveSim(inactiveGold)).toBe(false);
+
+    // Consolidation simulation: multiple active records belonging to same asset
+    const anotherActiveGold = calculateHoldingMetrics({
+      id: 'gold-active-2',
+      assetName: 'Active Gold 2',
+      category: 'Digital Gold',
+      assetType: 'Digital Gold',
+      quantity: 3,
+      buyPrice: 7100,
+      investedAmount: 3000,
+      currentValue: 2900,
+      buyDate: '2026-02-01',
+      purchaseDate: '2026-02-01',
+      charges: 0,
+      owner: 'Me',
+      isDemo: false,
+      createdAt: '',
+      updatedAt: ''
+    }, [], {});
+
+    const group = [activeGold, anotherActiveGold];
+    const overallAmount = group.reduce((sum, h) => sum + (h.investedAmount ?? 0), 0);
+    expect(overallAmount).toBe(8000); // 5000 + 3000
+  });
 });
+

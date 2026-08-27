@@ -153,7 +153,13 @@ export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[])
       amount: category === 'Mutual Funds'
         ? getMutualFundMetrics(inv).investedAmount
         : isCommodityCategory(category)
-          ? (inv.investedAmount ?? 0)
+          ? (() => {
+              if (inv.investedAmount !== undefined && inv.investedAmount !== null) {
+                const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+                return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed;
+              }
+              return 0;
+            })()
           : (qty * price),
       charges: inv.charges ?? 0,
       date: inv.buyDate || inv.purchaseDate || '2026-01-01',
@@ -174,15 +180,40 @@ export const calculateHoldingMetrics = (
   const category = inv.category || inv.assetType || 'Stocks';
 
   if (isCommodityCategory(category)) {
-    const hasInvested = inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0;
-    const hasCurrent = inv.currentValue !== undefined && inv.currentValue !== null && inv.currentValue > 0;
+    let manualInvested = 0;
+    if (inv.investedAmount !== undefined && inv.investedAmount !== null) {
+      const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+      if (!isNaN(parsed) && isFinite(parsed)) {
+        manualInvested = parsed;
+      }
+    } else {
+      const buyTxs = allTxs.filter(tx => tx.type === 'BUY');
+      if (buyTxs.length > 0) {
+        manualInvested = buyTxs.reduce((sum, tx) => {
+          const amt = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount as any);
+          return sum + (isNaN(amt) ? 0 : amt);
+        }, 0);
+      }
+    }
+
+    let manualCurrent: number | undefined = undefined;
+    if (inv.currentValue !== undefined && inv.currentValue !== null) {
+      const parsed = typeof inv.currentValue === 'number' ? inv.currentValue : parseFloat(inv.currentValue as any);
+      if (!isNaN(parsed) && isFinite(parsed)) {
+        manualCurrent = parsed;
+      }
+    }
+
+    const hasInvested = manualInvested > 0;
+    const hasCurrent = manualCurrent !== undefined && manualCurrent > 0;
+
     return {
       ...inv,
       quantity: inv.weightGrams ?? inv.quantity ?? 0,
       buyPrice: inv.buyPricePerGram ?? inv.buyPrice ?? 0,
       currentPrice: inv.currentPricePerGram ?? inv.currentPrice ?? null,
-      investedAmount: inv.investedAmount ?? 0,
-      currentValue: inv.currentValue ?? undefined,
+      investedAmount: manualInvested,
+      currentValue: manualCurrent,
       profitLoss: undefined,
       returnPercent: undefined,
       realizedPL: 0,

@@ -4,6 +4,7 @@ import { usePortfolio } from '../hooks/usePortfolio';
 import { getInvestmentAge } from '../utils/calculations';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
 import { Wallet } from 'lucide-react';
+import { isCommodityCategory } from '../services/portfolioCalculationService';
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
   'Stocks': 'Stock',
@@ -74,8 +75,29 @@ export const Portfolio: React.FC = () => {
   const { holdings } = usePortfolio();
   const [selectedCategory, setSelectedCategory] = React.useState<string>('All');
 
+  const isHoldingActive = (h: any): boolean => {
+    const category = h.category || h.assetType || '';
+    
+    if (category === 'IPOs') {
+      const status = h.ipoAllotmentStatus || h.allotmentStatus || 'Applied';
+      const inactiveStatuses = ['Not Allotted', 'Refund Pending', 'Refunded', 'Withdrawn', 'Sold'];
+      return !inactiveStatuses.includes(status);
+    }
+    
+    if (isCommodityCategory(category)) {
+      const hasWeight = h.quantity > 0;
+      const hasInvested = (h.investedAmount ?? 0) > 0;
+      const hasCurrent = (h.currentValue ?? 0) > 0;
+      return hasWeight || hasInvested || hasCurrent;
+    }
+    
+    return h.quantity > 0;
+  };
+
+  const activeHoldings = holdings.filter(isHoldingActive);
+
   const consolidatedMap: Record<string, any[]> = {};
-  holdings.forEach(h => {
+  activeHoldings.forEach(h => {
     const key = getAssetKey(h);
     if (!consolidatedMap[key]) {
       consolidatedMap[key] = [];
