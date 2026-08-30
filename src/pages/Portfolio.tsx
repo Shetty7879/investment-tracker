@@ -4,7 +4,7 @@ import { usePortfolio } from '../hooks/usePortfolio';
 import { getInvestmentAge } from '../utils/calculations';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
 import { Wallet } from 'lucide-react';
-import { isCommodityCategory, calculateMonthlyInvestments } from '../services/portfolioCalculationService';
+import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested } from '../services/portfolioCalculationService';
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
   'Stocks': 'Stock',
@@ -163,7 +163,7 @@ const renderPlatformBadges = (platformsString: string) => {
 
 export const Portfolio: React.FC = () => {
   const { formatCurrency } = useApp();
-  const { holdings, transactions } = usePortfolio();
+  const { holdings, transactions: activeHoldingsTxs } = usePortfolio();
   const [selectedCategory, setSelectedCategory] = React.useState<string>('All');
 
   const isHoldingActive = (h: any): boolean => {
@@ -256,15 +256,14 @@ export const Portfolio: React.FC = () => {
     ? consolidatedAssets
     : consolidatedAssets.filter(asset => asset.category === selectedCategory);
   
-  // Calculate summary values
-  const totalInvested = activeHoldings.reduce((sum, h) => sum + (h.investedAmount ?? 0), 0);
-  const holdingsCount = consolidatedAssets.length;
+  // Calculate summary values using centralized helpers
+  const totalInvested = calculateTotalInvested(holdings, activeHoldingsTxs);
+  const holdingsCount = activeHoldings.length;
 
   // Monthly Invested Calculation
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
-  const monthlyData = calculateMonthlyInvestments(transactions, holdings, currentYear, 0);
-  const monthlyInvestedAmount = monthlyData[currentMonthIdx]?.actual ?? 0;
+  const monthlyInvestedAmount = calculateMonthlyInvested(activeHoldingsTxs, holdings, currentYear, currentMonthIdx);
 
   // Find top category by allocation
   const categoryAllocations: Record<string, number> = {};

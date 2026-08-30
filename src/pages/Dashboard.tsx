@@ -11,7 +11,7 @@ import {
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
 import { getAssetTypeBadgeStyle, getBrokerBadgeStyle } from '../utils/badgeStyles';
-import { isCommodityCategory, calculateMonthlyInvestments } from '../services/portfolioCalculationService';
+import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested, calculateTotalInvestedByPlatform } from '../services/portfolioCalculationService';
 
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
@@ -40,17 +40,34 @@ export const Dashboard: React.FC = () => {
   const [isMoneyModalOpen, setIsMoneyModalOpen] = useState(false);
 
   // Invoke shared calculation hook
-  const { holdings, portfolioTotal, transactions } = usePortfolio();
+  const { holdings, transactions: activeHoldingsTxs } = usePortfolio();
+
+  // Helper to determine active status
+  const isHoldingActive = (h: any): boolean => {
+    const category = h.category || h.assetType || '';
+    if (category === 'IPOs') {
+      const status = h.ipoAllotmentStatus || h.allotmentStatus || 'Applied';
+      const inactiveStatuses = ['Not Allotted', 'Refund Pending', 'Refunded', 'Withdrawn', 'Sold'];
+      return !inactiveStatuses.includes(status);
+    }
+    if (isCommodityCategory(category)) {
+      return (h.quantity > 0) || ((h.investedAmount ?? 0) > 0) || ((h.currentValue ?? 0) > 0);
+    }
+    return h.quantity > 0;
+  };
 
   // Calculate basic details: Number of Investments
-  const numberOfInvestments = holdings.length;
-  const totalInvestedAmount = portfolioTotal.totalInvested;
+  const numberOfInvestments = holdings.filter(isHoldingActive).length;
+  const totalInvestedAmount = calculateTotalInvested(holdings, activeHoldingsTxs);
+  console.debug("DASHBOARD RENDER: calculateTotalInvested =", totalInvestedAmount);
 
   // Monthly Invested Calculation
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
-  const monthlyData = calculateMonthlyInvestments(transactions, holdings, currentYear, 0);
-  const monthlyInvestedAmount = monthlyData[currentMonthIdx]?.actual ?? 0;
+  const monthlyInvestedAmount = calculateMonthlyInvested(activeHoldingsTxs, holdings, currentYear, currentMonthIdx);
+  console.debug("DASHBOARD RENDER: calculateMonthlyInvested =", monthlyInvestedAmount);
+
+
 
   // Filter and sort for Recent Investments (top 5 sorted by buy date / purchase date)
   const recentInvestments = [...holdings]
@@ -98,16 +115,11 @@ export const Dashboard: React.FC = () => {
     .filter(r => r.type === 'give' && r.amountPaid < r.amount)
     .length;
 
-  // Group investments by platform for separate card
-  const platformInvestmentsMap: Record<string, number> = {};
-  holdings.forEach(inv => {
-    const rawBroker = inv.broker === 'Other' ? inv.customBroker : inv.broker;
-    const platform = (rawBroker && rawBroker.trim()) ? rawBroker.trim() : 'Other';
-    const amount = inv.investedAmount ?? 0;
-    platformInvestmentsMap[platform] = (platformInvestmentsMap[platform] || 0) + amount;
-  });
+  // Group investments by platform using the canonical calculation engine
+  // This guarantees: sum of platform totals === totalInvestedAmount
+  const platformTotalsMap = calculateTotalInvestedByPlatform(holdings, activeHoldingsTxs);
 
-  const platformInvestments = Object.entries(platformInvestmentsMap)
+  const platformInvestments = Object.entries(platformTotalsMap)
     .map(([name, amount]) => ({ name, amount }))
     .filter(p => p.amount > 0)
     .sort((a, b) => b.amount - a.amount);

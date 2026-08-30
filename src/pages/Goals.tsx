@@ -33,6 +33,8 @@ export const Goals: React.FC = () => {
   // Invoke shared calculation hook
   const { holdings } = usePortfolio();
 
+
+
   const handleEdit = (goal: Goal) => {
     setEditingGoal(goal);
     setIsModalOpen(true);
@@ -123,8 +125,8 @@ export const Goals: React.FC = () => {
     'Other': { bg: 'bg-slate-500/10 dark:bg-slate-950/20', text: 'text-slate-600 dark:text-slate-400' },
   };
 
-  // Filter goals to show real data only
   const typeFilteredGoals = goals.filter(g => !g.isDemo);
+  const filteredGoalMetrics = typeFilteredGoals.map(goal => calculateGoalMetrics(goal, holdings));
 
   return (
     <div className="space-y-6 animate-slide-in">
@@ -180,8 +182,9 @@ export const Goals: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-semibold">
-          {typeFilteredGoals.map((goal) => {
-            const { contributed, currentValue, target, remaining, progressPercent } = calculateGoalMetrics(goal, holdings);
+          {typeFilteredGoals.map((goal, idx) => {
+            const metric = filteredGoalMetrics[idx] || {};
+            const { contributed, currentValue, target, remaining, progressPercent } = metric;
             const daysData = getDaysRemaining(goal.targetDate);
             const style = categoryStyles[goal.category] || categoryStyles.Other;
             const isCompleted = goal.isCompleted || progressPercent >= 100;

@@ -14,6 +14,7 @@ export interface MarketPriceData {
 }
 
 let rateLimitCooldownUntil = 0;
+let authErrorCooldownUntil = 0;
 
 /**
  * Batch fetches quote prices from Yahoo Finance.
@@ -26,6 +27,10 @@ export const fetchMarketPrices = async (
   if (Date.now() < rateLimitCooldownUntil) {
     console.warn("fetchMarketPrices call skipped due to active HTTP 429 rate limit cooldown.");
     return {};
+  }
+  // Auth-error cooldown check (401/403)
+  if (Date.now() < authErrorCooldownUntil) {
+    return {}; // Silent skip — already logged the 401 error
   }
 
   // Filter out invalid/empty symbols
@@ -108,6 +113,8 @@ export const fetchMarketPrices = async (
     }
 
     if (authOrForbiddenError) {
+      authErrorCooldownUntil = Date.now() + 10 * 60 * 1000; // 10-min cooldown on 401/403
+      console.warn('fetchMarketPrices: 401/403 received. Pausing market price fetching for 10 minutes.');
       throw new Error("Price retrieval failed due to authentication/forbidden errors (HTTP 401/403).");
     }
 

@@ -7,7 +7,7 @@ import {
 } from '../data/demoData';
 import { fetchMarketPrices } from '../services/marketDataService';
 import type { MarketPriceData } from '../services/marketDataService';
-import { isIndianMarketOpen } from '../services/portfolioCalculationService';
+import { isIndianMarketOpen, calculateHoldingMetrics } from '../services/portfolioCalculationService';
 import {
   loadFridayTrackData,
   saveFridayTrackData,
@@ -421,9 +421,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return inv;
     });
 
-    const success = await syncWithCloud(nextInvs, transactions, goals, moneyRecords);
+    const buyDate = updated.buyDate || updated.purchaseDate || new Date().toISOString().split('T')[0];
+    const category = updated.category || updated.assetType || 'Stocks';
+    let amt = 0;
+    if (category === 'Mutual Funds') {
+      amt = updated.investedAmount ?? (updated.quantity * updated.buyPrice);
+    } else if (category === 'IPOs') {
+      amt = updated.investedAmount ?? (updated.quantity * updated.buyPrice);
+    } else {
+      amt = updated.quantity * updated.buyPrice;
+    }
+
+    const parentTxs = transactions.filter(t => t.investmentId === updated.id);
+    const initialTx = parentTxs.find(t => t.type === 'BUY');
+    let nextTxs = [...transactions];
+
+    if (initialTx && parentTxs.length <= 1) {
+      nextTxs = transactions.map(t => {
+        if (t.id === initialTx.id) {
+          return {
+            ...t,
+            quantity: updated.quantity,
+            price: updated.buyPrice,
+            amount: amt,
+            charges: updated.charges ?? 0,
+            date: buyDate,
+            isDemo: !!updated.isDemo
+          };
+        }
+        return t;
+      });
+    } else if (!initialTx) {
+      const firstTx: Transaction = {
+        id: generateId(),
+        investmentId: updated.id,
+        type: 'BUY',
+        quantity: updated.quantity,
+        price: updated.buyPrice,
+        amount: amt,
+        charges: updated.charges ?? 0,
+        date: buyDate,
+        notes: 'Initial purchase',
+        isDemo: !!updated.isDemo,
+        createdAt: new Date().toISOString()
+      };
+      nextTxs.push(firstTx);
+    }
+
+    const success = await syncWithCloud(nextInvs, nextTxs, goals, moneyRecords);
     if (success) {
       setInvestments(nextInvs);
+      setTransactions(nextTxs);
       showToast('Investment updated successfully!', 'success');
     }
   };
@@ -447,20 +495,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: generateId(),
       createdAt: new Date().toISOString()
     };
-    const nextTxs = [...transactions, newTx];
+    let nextTxs = [...transactions, newTx];
 
-    const success = await syncWithCloud(investments, nextTxs, goals, moneyRecords);
+    // Ensure legacy parent investment has its initial BUY transaction created in database
+    const initialTx = transactions.find(t => t.investmentId === tx.investmentId && t.type === 'BUY');
+    if (!initialTx) {
+      const parentInv = investments.find(inv => inv.id === tx.investmentId);
+      if (parentInv) {
+        const buyDate = parentInv.buyDate || parentInv.purchaseDate || new Date().toISOString().split('T')[0];
+        const category = parentInv.category || parentInv.assetType || 'Stocks';
+        let amt = 0;
+        if (category === 'Mutual Funds') {
+          amt = parentInv.investedAmount ?? (parentInv.quantity * parentInv.buyPrice);
+        } else if (category === 'IPOs') {
+          amt = parentInv.investedAmount ?? (parentInv.quantity * parentInv.buyPrice);
+        } else {
+          amt = parentInv.quantity * parentInv.buyPrice;
+        }
+        const firstTx: Transaction = {
+          id: generateId(),
+          investmentId: parentInv.id,
+          type: 'BUY',
+          quantity: parentInv.quantity,
+          price: parentInv.buyPrice,
+          amount: amt,
+          charges: parentInv.charges ?? 0,
+          date: buyDate,
+          notes: 'Initial purchase',
+          isDemo: !!parentInv.isDemo,
+          createdAt: new Date().toISOString()
+        };
+        // Insert initial transaction before the new one
+        nextTxs = [firstTx, ...nextTxs];
+      }
+    }
+
+    const nextInvs = investments.map(inv => {
+      if (inv.id === tx.investmentId) {
+        const parentTxs = nextTxs.filter(t => t.investmentId === inv.id);
+        const metrics = calculateHoldingMetrics(inv, parentTxs, marketPrices);
+        return {
+          ...inv,
+          quantity: metrics.quantity,
+          buyPrice: metrics.buyPrice,
+          investedAmount: metrics.investedAmount,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return inv;
+    });
+
+    const success = await syncWithCloud(nextInvs, nextTxs, goals, moneyRecords);
     if (success) {
+      setInvestments(nextInvs);
       setTransactions(nextTxs);
       showToast('Transaction added successfully!', 'success');
     }
   };
 
   const deleteTransaction = async (id: string) => {
+    const txToDelete = transactions.find(t => t.id === id);
     const nextTxs = transactions.filter(t => t.id !== id);
 
-    const success = await syncWithCloud(investments, nextTxs, goals, moneyRecords);
+    let nextInvs = [...investments];
+    if (txToDelete) {
+      nextInvs = investments.map(inv => {
+        if (inv.id === txToDelete.investmentId) {
+          const parentTxs = nextTxs.filter(t => t.investmentId === inv.id);
+          const metrics = calculateHoldingMetrics(inv, parentTxs, marketPrices);
+          return {
+            ...inv,
+            quantity: metrics.quantity,
+            buyPrice: metrics.buyPrice,
+            investedAmount: metrics.investedAmount,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return inv;
+      });
+    }
+
+    const success = await syncWithCloud(nextInvs, nextTxs, goals, moneyRecords);
     if (success) {
+      setInvestments(nextInvs);
       setTransactions(nextTxs);
       showToast('Transaction deleted successfully.', 'info');
     }
@@ -469,8 +586,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateTransaction = async (updated: Transaction) => {
     const nextTxs = transactions.map(t => t.id === updated.id ? updated : t);
 
-    const success = await syncWithCloud(investments, nextTxs, goals, moneyRecords);
+    const nextInvs = investments.map(inv => {
+      if (inv.id === updated.investmentId) {
+        const parentTxs = nextTxs.filter(t => t.investmentId === inv.id);
+        const metrics = calculateHoldingMetrics(inv, parentTxs, marketPrices);
+        return {
+          ...inv,
+          quantity: metrics.quantity,
+          buyPrice: metrics.buyPrice,
+          investedAmount: metrics.investedAmount,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return inv;
+    });
+
+    const success = await syncWithCloud(nextInvs, nextTxs, goals, moneyRecords);
     if (success) {
+      setInvestments(nextInvs);
       setTransactions(nextTxs);
       showToast('Transaction updated successfully!', 'success');
     }

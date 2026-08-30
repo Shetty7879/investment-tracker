@@ -1,12 +1,15 @@
 import { useApp } from '../contexts/AppContext';
-import {
-  calculateHoldingMetrics,
-  calculatePortfolioTotals
-} from '../services/portfolioCalculationService';
+import { calculateHoldingMetrics, calculatePortfolioTotals, isDemoInvestment, isDemoTransaction } from '../services/portfolioCalculationService';
 import type { HoldingMetrics } from '../services/portfolioCalculationService';
 
 export const usePortfolio = (dateFilter?: string, customStart?: string, customEnd?: string) => {
-  const { investments, transactions, dataTypeFilter, ownerFilter, marketPrices } = useApp();
+  const { 
+    investments,
+    transactions,
+    dataTypeFilter,
+    ownerFilter,
+    marketPrices
+  } = useApp();
 
   // Helper to determine date range matching
   const filterByDateRange = (dateStr: string) => {
@@ -57,8 +60,9 @@ export const usePortfolio = (dateFilter?: string, customStart?: string, customEn
   // 1. Filter investments by data type, owner, and date limits
   const filteredInvs = investments.filter(inv => {
     // Data type isolation
-    if (dataTypeFilter === 'Real' && inv.isDemo) return false;
-    if (dataTypeFilter === 'Demo' && !inv.isDemo) return false;
+    const isDemo = isDemoInvestment(inv);
+    if (dataTypeFilter === 'Real' && isDemo) return false;
+    if (dataTypeFilter === 'Demo' && !isDemo) return false;
 
     // Owner filtration
     if (ownerFilter !== 'All' && inv.owner !== ownerFilter) return false;
@@ -73,8 +77,9 @@ export const usePortfolio = (dateFilter?: string, customStart?: string, customEn
   // Filter transaction records by data type, owner, and date limits
   const filteredTxs = transactions.filter(tx => {
     // Data type isolation
-    if (dataTypeFilter === 'Real' && tx.isDemo) return false;
-    if (dataTypeFilter === 'Demo' && !tx.isDemo) return false;
+    const isDemo = isDemoTransaction(tx, investments);
+    if (dataTypeFilter === 'Real' && isDemo) return false;
+    if (dataTypeFilter === 'Demo' && !isDemo) return false;
 
     // Resolve owner from parent investment
     const parent = investments.find(inv => inv.id === tx.investmentId);
@@ -94,6 +99,7 @@ export const usePortfolio = (dateFilter?: string, customStart?: string, customEn
   });
 
   // Calculate aggregates using centralized service
+
   const portfolioTotal = calculatePortfolioTotals(holdings);
 
   return {

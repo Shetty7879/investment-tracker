@@ -556,45 +556,8 @@ export const calculateMonthlyInvestments = (
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const allEffectiveTxs: Transaction[] = [];
-  calculatedHoldings.forEach(h => {
-    const parentTxs = transactions.filter(tx => tx.investmentId === h.id);
-    const effTxs = getEffectiveTransactions(h as any, parentTxs);
-    allEffectiveTxs.push(...effTxs);
-  });
-
   return monthNames.map((name, index) => {
-    const totalForMonth = allEffectiveTxs.reduce((sum, tx) => {
-      if ((tx as any).isDemo) return sum;
-      const pDate = new Date(tx.date);
-      if (!isNaN(pDate.getTime()) && pDate.getMonth() === index && pDate.getFullYear() === year) {
-        const parent = calculatedHoldings.find(h => h.id === tx.investmentId);
-        if (!parent) return sum;
-
-        const cat = parent.category || parent.assetType || '';
-        if (cat === 'IPOs' || cat === 'IPO') {
-          const status = parent.ipoAllotmentStatus || parent.allotmentStatus || 'Applied';
-          const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
-          if (!isAllotted) return sum;
-        }
-
-        if (tx.type === 'BUY') {
-          let txAmount = 0;
-          if (cat === 'Mutual Funds') {
-            txAmount = getMutualFundTransactionMetrics(tx, parent).amount;
-          } else if (isCommodityCategory(cat)) {
-            const amt = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount as any);
-            txAmount = isNaN(amt) ? 0 : amt;
-          } else {
-            txAmount = tx.amount ?? (tx.quantity * tx.price);
-          }
-          return sum + txAmount + (tx.charges ?? 0);
-        }
-      }
-      return sum;
-    }, 0);
-
-    const actual = safeRound(totalForMonth);
+    const actual = calculateMonthlyInvested(transactions, calculatedHoldings, year, index);
     const diff = safeRound(actual - monthlyTarget);
     const percentage = monthlyTarget > 0 ? safeRound((actual / monthlyTarget) * 100) : 0;
 
@@ -607,3 +570,323 @@ export const calculateMonthlyInvestments = (
     };
   });
 };
+
+/** Helper to check if an investment is a demo record (accounting for missing isDemo: true leak) */
+export const isDemoInvestment = (inv: Investment): boolean => {
+  return !!(inv.isDemo || (inv.id && /^[1-8]$/.test(inv.id)));
+};
+
+/** Helper to check if a transaction is a demo record */
+export const isDemoTransaction = (tx: Transaction, investments: Investment[]): boolean => {
+  if (tx.isDemo) return true;
+  if (tx.investmentId && /^[1-8]$/.test(tx.investmentId)) return true;
+  const parent = investments.find(inv => inv.id === tx.investmentId);
+  return parent ? isDemoInvestment(parent) : false;
+};
+
+/** Helper to extract transaction cost based on security type (amount-based vs quantity-based) */
+export const getTransactionCost = (tx: Transaction, category: string): number => {
+  const catClean = (category || '').trim().toLowerCase();
+  const isAmountBased =
+    catClean === 'mutual funds' ||
+    catClean === 'fixed deposits' ||
+    catClean === 'savings/cash' ||
+    isCommodityCategory(catClean);
+
+  if (isAmountBased && typeof tx.amount === 'number' && tx.amount > 0) {
+    return tx.amount;
+  }
+  return tx.quantity * tx.price;
+};
+
+/** Helper to extract dynamic, normalized transaction cost resolving heuristics for Mutual Funds/commodities */
+export const getEffectiveTransactionCost = (tx: Transaction, inv: Investment): number => {
+  const category = inv.category || inv.assetType || 'Stocks';
+  if (category === 'Mutual Funds') {
+    return getMutualFundTransactionMetrics(tx, inv).amount;
+  }
+  const isCommodity = isCommodityCategory(category);
+  if (isCommodity) {
+    if (tx.amount !== undefined && tx.amount !== null && tx.amount >= 1) {
+      return tx.amount;
+    }
+    return tx.price;
+  }
+  return tx.amount ?? (tx.quantity * tx.price);
+};
+
+/**
+ * Calculates the total lifetime capital invested by the user.
+ *
+ * Rules:
+ * - IPOs: count only allotted amount (allottedQty x issuePrice + charges). Unallotted = 0.
+ * - Commodities (Gold/Silver/Platinum): use inv.investedAmount field (matches calculateHoldingMetrics).
+ *   Falls back to summing tx.price per BUY (tx.price = total amount paid, not per-gram rate).
+ * - Mutual Funds: use getMutualFundTransactionMetrics(tx).amount per BUY tx.
+ * - Stocks / ETFs / FD / Savings: use tx.amount per BUY tx, fallback qty x price.
+ * - SELL / SPLIT / DIVIDEND / INTEREST / CHARGE: all ignored.
+ * - Legacy (no BUY transactions): use inv.investedAmount, fallback qty x buyPrice + charges.
+ * - Demo investments: always excluded.
+ */
+export const calculateTotalInvested = (
+  investments: Investment[],
+  transactions: Transaction[]
+): number => {
+  const realInvs = investments.filter(inv => !isDemoInvestment(inv));
+  const realTxs = transactions.filter(tx => !isDemoTransaction(tx, investments));
+
+  let total = 0;
+
+  realInvs.forEach(inv => {
+    const invTxs = realTxs.filter(tx => tx.investmentId === inv.id);
+    const buyTxs = invTxs.filter(tx => tx.type === 'BUY');
+    const category = inv.category || inv.assetType || 'Stocks';
+
+    let contribution = 0;
+
+    if (category === 'IPOs') {
+      const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
+      const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
+      if (isAllotted) {
+        const allottedQty = inv.ipoQuantityAllotted ?? inv.quantity ?? 0;
+        const issuePrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+        contribution = allottedQty * issuePrice + (inv.charges ?? 0);
+      }
+      // else contribution stays 0
+
+    } else if (isCommodityCategory(category)) {
+      // For commodities, calculateHoldingMetrics uses inv.investedAmount directly.
+      // We must match that — the tx.amount field stores qty*price (a meaningless product
+      // in PhonePe format), while tx.price stores the actual rupees invested per purchase.
+      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+        const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+        if (!isNaN(parsed) && isFinite(parsed)) {
+          contribution = parsed;
+        }
+      } else if (buyTxs.length > 0) {
+        // Fallback: sum tx.price (= rupee amount paid) per BUY transaction
+        contribution = buyTxs.reduce((sum, tx) => sum + (tx.price ?? 0) + (tx.charges ?? 0), 0);
+      } else {
+        const qty = inv.weightGrams ?? inv.quantity ?? 1;
+        const price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
+        contribution = qty * price + (inv.charges ?? 0);
+      }
+
+    } else if (buyTxs.length > 0) {
+      contribution = buyTxs.reduce((sum, tx) => {
+        const cost = getEffectiveTransactionCost(tx, inv);
+        return sum + cost + (tx.charges ?? 0);
+      }, 0);
+
+    } else {
+      // Legacy investment with no BUY transactions
+      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+        contribution = inv.investedAmount;
+      } else {
+        const qty = inv.quantity ?? 1;
+        const price = inv.buyPrice ?? inv.currentPrice ?? 0;
+        contribution = qty * price + (inv.charges ?? 0);
+      }
+    }
+
+    total += contribution;
+  });
+
+  return safeRound(total);
+};
+
+
+/**
+ * Returns a map of platform → lifetime invested capital, using the same rules as calculateTotalInvested.
+ * Guarantees: sum(result.values()) === calculateTotalInvested(investments, transactions)
+ */
+export const calculateTotalInvestedByPlatform = (
+  investments: Investment[],
+  transactions: Transaction[]
+): Record<string, number> => {
+  const realInvs = investments.filter(inv => !isDemoInvestment(inv));
+  const realTxs = transactions.filter(tx => !isDemoTransaction(tx, investments));
+
+  const platformMap: Record<string, number> = {};
+
+  realInvs.forEach(inv => {
+    const invTxs = realTxs.filter(tx => tx.investmentId === inv.id);
+    const buyTxs = invTxs.filter(tx => tx.type === 'BUY');
+    const category = inv.category || inv.assetType || 'Stocks';
+    const broker = (inv.broker === 'Other' ? (inv.customBroker || 'Other') : (inv.broker || 'Other')) || 'Other';
+
+    let contribution = 0;
+
+    if (category === 'IPOs') {
+      const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
+      const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
+      if (isAllotted) {
+        const allottedQty = inv.ipoQuantityAllotted ?? inv.quantity ?? 0;
+        const issuePrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+        contribution = allottedQty * issuePrice + (inv.charges ?? 0);
+      }
+    } else if (isCommodityCategory(category)) {
+      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+        const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+        if (!isNaN(parsed) && isFinite(parsed)) contribution = parsed;
+      } else if (buyTxs.length > 0) {
+        contribution = buyTxs.reduce((sum, tx) => sum + (tx.price ?? 0) + (tx.charges ?? 0), 0);
+      } else {
+        const qty = inv.weightGrams ?? inv.quantity ?? 1;
+        const price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
+        contribution = qty * price + (inv.charges ?? 0);
+      }
+    } else if (buyTxs.length > 0) {
+      contribution = buyTxs.reduce((sum, tx) => {
+        const cost = getEffectiveTransactionCost(tx, inv);
+        return sum + cost + (tx.charges ?? 0);
+      }, 0);
+    } else {
+      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+        contribution = inv.investedAmount;
+      } else {
+        const qty = inv.quantity ?? 1;
+        const price = inv.buyPrice ?? inv.currentPrice ?? 0;
+        contribution = qty * price + (inv.charges ?? 0);
+      }
+    }
+
+    platformMap[broker] = (platformMap[broker] || 0) + contribution;
+  });
+
+  // Round platform totals at the very end
+  const roundedPlatformMap: Record<string, number> = {};
+  Object.entries(platformMap).forEach(([broker, amount]) => {
+    roundedPlatformMap[broker] = safeRound(amount);
+  });
+
+  return roundedPlatformMap;
+};
+
+/** Calculate monthly invested amount */
+export const calculateMonthlyInvested = (
+  transactions: Transaction[],
+  investments: Investment[],
+  year: number,
+  monthIndex: number
+): number => {
+  const realInvs = investments.filter(inv => !isDemoInvestment(inv));
+  const realTxs = transactions.filter(tx => !isDemoTransaction(tx, investments));
+
+  let total = 0;
+
+  realInvs.forEach(inv => {
+    const parentTxs = realTxs.filter(tx => tx.investmentId === inv.id);
+    const buyTxs = parentTxs.filter(tx => tx.type === 'BUY');
+    const category = inv.category || inv.assetType || 'Stocks';
+
+    if (buyTxs.length > 0) {
+      buyTxs.forEach(tx => {
+        const txDate = new Date(tx.date);
+        if (isNaN(txDate.getTime())) return;
+        if (txDate.getFullYear() === year && txDate.getMonth() === monthIndex) {
+          if (category === 'IPOs') {
+            const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
+            const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
+            if (!isAllotted) return;
+          }
+
+          // Commodities: tx.price = rupee amount paid per purchase (consistent with calculateTotalInvested)
+          const cost = isCommodityCategory(category)
+            ? (tx.price ?? 0)
+            : getEffectiveTransactionCost(tx, inv);
+          total += cost + (tx.charges ?? 0);
+        }
+      });
+    } else {
+      // Legacy investment with no BUY transactions
+      const buyDateStr = inv.buyDate || inv.purchaseDate || '2026-01-01';
+      const buyDate = new Date(buyDateStr);
+      if (!isNaN(buyDate.getTime()) && buyDate.getFullYear() === year && buyDate.getMonth() === monthIndex) {
+        if (category === 'IPOs') {
+          const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
+          const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
+          if (isAllotted) {
+            const allottedQty = inv.ipoQuantityAllotted ?? inv.quantity ?? 0;
+            const issuePrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+            total += allottedQty * issuePrice + (inv.charges ?? 0);
+          }
+        } else if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+          total += inv.investedAmount;
+        } else {
+          const qty = inv.quantity ?? 1;
+          const price = inv.buyPrice ?? inv.currentPrice ?? 0;
+          total += qty * price + (inv.charges ?? 0);
+        }
+      }
+    }
+  });
+
+  return safeRound(total);
+};
+
+/** Calculates active investments representing current holdings */
+export const calculateActiveInvestments = (
+  investments: Investment[],
+  transactions: Transaction[]
+): number => {
+  const realInvs = investments.filter(inv => !isDemoInvestment(inv));
+  const realTxs = transactions.filter(tx => !isDemoTransaction(tx, investments));
+  
+  let activeCount = 0;
+  realInvs.forEach(inv => {
+    const parentTxs = realTxs.filter(tx => tx.investmentId === inv.id);
+    const metrics = calculateHoldingMetrics(inv, parentTxs, {});
+    
+    // Exclude unallotted IPOs
+    if (inv.category === 'IPOs' || inv.assetType === 'IPOs') {
+      const status = inv.ipoAllotmentStatus || 'Applied';
+      const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
+      if (!isAllotted || status === 'Sold') return;
+    }
+    
+    if (metrics.quantity > 0) {
+      activeCount++;
+    }
+  });
+  return activeCount;
+};
+
+/** Calculates cost basis (totalInvestedCost) for a single holding */
+export const calculateCostBasis = (
+  inv: Investment,
+  transactions: Transaction[]
+): number => {
+  const metrics = calculateHoldingMetrics(inv, transactions, {});
+  return metrics.investedAmount;
+};
+
+/** Calculates average buy price for a single holding */
+export const calculateAverageBuyPrice = (
+  inv: Investment,
+  transactions: Transaction[]
+): number => {
+  const metrics = calculateHoldingMetrics(inv, transactions, {});
+  return metrics.buyPrice;
+};
+
+/** Calculates realized profit or loss for a single holding */
+export const calculateRealizedProfitLoss = (
+  inv: Investment,
+  transactions: Transaction[]
+): number => {
+  const metrics = calculateHoldingMetrics(inv, transactions, {});
+  return metrics.realizedPL;
+};
+
+/** Calculates current value for a single holding based on market price */
+export const calculateCurrentValue = (
+  inv: Investment,
+  transactions: Transaction[],
+  marketPrices: Record<string, MarketPriceData> = {}
+): number | undefined => {
+  const metrics = calculateHoldingMetrics(inv, transactions, marketPrices);
+  return metrics.currentValue ?? undefined;
+};
+
+

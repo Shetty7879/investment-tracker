@@ -48,7 +48,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     dashboard: '📊 Dashboard',
     investments: '📈 Investments Portfolio',
     portfolio: '💼 Portfolio',
-    'age-of-investments': '⏳ Age of Investments',
     monthly: '🗓️ Monthly Target & Goals',
     goals: '🎯 Financial Goals',
     reports: '📑 Investment Reports',

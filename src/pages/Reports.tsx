@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
-import { getMutualFundTransactionMetrics } from '../utils/calculations';
-import { isCommodityCategory } from '../services/portfolioCalculationService';
+import { isCommodityCategory, calculateTotalInvested, getEffectiveTransactionCost } from '../services/portfolioCalculationService';
 import {
   ResponsiveContainer,
   PieChart,
@@ -65,7 +64,7 @@ const normalizeAssetClass = (category: string | undefined): string => {
 };
 
 export const Reports: React.FC = () => {
-  const { formatCurrency } = useApp();
+  const { formatCurrency, investments, transactions: allTransactions } = useApp();
 
   // Filter States
   const [dateFilter, setDateFilter] = useState<DateFilterType>('all-time');
@@ -80,9 +79,11 @@ export const Reports: React.FC = () => {
   );
 
   const {
-    totalInvested,
     totalCurrent
   } = portfolioTotal;
+
+  // Lifetime invested is independent of date filter
+  const totalInvested = calculateTotalInvested(investments, allTransactions);
 
   const formatYAxis = (value: number) => {
     if (value >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
@@ -160,7 +161,7 @@ export const Reports: React.FC = () => {
       if (!isAllotted) return;
     }
 
-    const metrics = parent ? getMutualFundTransactionMetrics(tx, parent) : { quantity: tx.quantity, price: tx.price, amount: tx.quantity * tx.price };
+    const txCost = parent ? getEffectiveTransactionCost(tx, parent) : (tx.amount ?? (tx.quantity * tx.price));
 
     const mLabel = `${monthNames[pDate.getMonth()]} ${pDate.getFullYear().toString().slice(-2)}`;
     const sortKey = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
@@ -168,7 +169,7 @@ export const Reports: React.FC = () => {
     if (!monthlySumMap[sortKey]) {
       monthlySumMap[sortKey] = { label: mLabel, amount: 0, sortKey };
     }
-    monthlySumMap[sortKey].amount += (metrics.amount + tx.charges);
+    monthlySumMap[sortKey].amount += (txCost + tx.charges);
   });
 
   const barChartData = Object.values(monthlySumMap)
@@ -200,16 +201,16 @@ export const Reports: React.FC = () => {
       if (!isAllotted) return;
     }
 
-    const metrics = parent ? getMutualFundTransactionMetrics(tx, parent) : { quantity: tx.quantity, price: tx.price, amount: tx.quantity * tx.price };
+    const txCost = parent ? getEffectiveTransactionCost(tx, parent) : (tx.amount ?? (tx.quantity * tx.price));
 
     if (tx.type === 'BUY') {
-      const cost = metrics.amount + tx.charges;
+      const cost = txCost + tx.charges;
       dateTotalsMap[dateKey].investedDelta += cost;
       dateTotalsMap[dateKey].currentDelta += cost;
     } else if (tx.type === 'SELL') {
-      const soldCost = tx.quantity * (parent?.buyPrice || metrics.price);
+      const soldCost = tx.quantity * (parent?.buyPrice || tx.price);
       dateTotalsMap[dateKey].investedDelta -= soldCost;
-      dateTotalsMap[dateKey].currentDelta -= metrics.amount;
+      dateTotalsMap[dateKey].currentDelta -= txCost;
     }
   });
 
@@ -564,9 +565,7 @@ export const Reports: React.FC = () => {
                           {tx.type === 'SPLIT'
                             ? '—'
                             : formatCurrency(parent
-                                ? isCommodityCategory(parent.category || parent.assetType)
-                                  ? (tx.amount ?? parent.investedAmount ?? 0)
-                                  : getMutualFundTransactionMetrics(tx, parent).amount
+                                ? getEffectiveTransactionCost(tx, parent)
                                 : (tx.amount ?? (tx.quantity * tx.price))
                               )
                           }

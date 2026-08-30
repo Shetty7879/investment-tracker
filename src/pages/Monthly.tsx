@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
-import { calculateMonthlyInvestments } from '../services/portfolioCalculationService';
+import { calculateMonthlyInvestments, calculateMonthlyInvested } from '../services/portfolioCalculationService';
 import {
   ResponsiveContainer,
   BarChart,
@@ -36,8 +36,8 @@ export const Monthly: React.FC = () => {
   // Monthly data for the current year, including target per month
   const monthlyData = calculateMonthlyInvestments(transactions, holdings, currentYear, monthlyTarget);
 
-  // Helper calculations
-  const investedThisMonth = monthlyData[currentMonthIdx]?.actual ?? 0;
+  // Helper calculations using centralized monthly invested calculator
+  const investedThisMonth = calculateMonthlyInvested(transactions, holdings, currentYear, currentMonthIdx);
   const remainingThisMonth = monthlyTarget > 0 ? monthlyTarget - investedThisMonth : 0;
   const progressPercent = monthlyTarget > 0 ? (investedThisMonth / monthlyTarget) * 100 : 0;
 
