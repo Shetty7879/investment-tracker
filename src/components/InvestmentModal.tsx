@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../contexts/AppContext';
 import type { Investment, AssetType, BrokerType } from '../types';
 import { X } from 'lucide-react';
@@ -73,6 +74,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   investmentToEdit
 }) => {
   const { addInvestment, updateInvestment, formatCurrency } = useApp();
+  const formRef = useRef<HTMLFormElement>(null);
 
   // ── Common fields ──────────────────────────────────────────────────
   const [name, setName] = useState('');
@@ -224,6 +226,16 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     setErrors({});
     setIsSubmitting(false);
     setMfEditHistory(['amount', 'nav', 'units']);
+
+    // Reset scroll position to top when modal opens
+    if (formRef.current) {
+      formRef.current.scrollTop = 0;
+    }
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollTop = 0;
+      }
+    }, 0);
 
     if (investmentToEdit) {
       const mappedType =
@@ -689,9 +701,9 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     'Not Allotted': 'text-red-700 bg-red-50 border-red-300 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/20',
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm overflow-y-auto font-semibold animate-fade-in">
-      <div className="relative w-full max-w-xl bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] animate-modal-enter">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm overflow-hidden font-semibold animate-fade-in">
+      <div className="relative w-full max-w-xl bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-modal-enter">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-150 dark:border-slate-800">
@@ -714,7 +726,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-sm">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-sm">
           {errors.submit && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs font-semibold">
               {errors.submit}
@@ -1405,6 +1417,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
