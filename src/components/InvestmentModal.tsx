@@ -89,6 +89,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const [mfInvestmentAmount, setMfInvestmentAmount] = useState('');
   const [mfNav, setMfNav] = useState('');
   const [mfUnits, setMfUnits] = useState('');
+  const [mfEditHistory, setMfEditHistory] = useState<('amount' | 'nav' | 'units')[]>(['amount', 'nav', 'units']);
 
   // ── Commodity-specific fields ──────────────────────────────────────
   const [currentPricePerGram, setCurrentPricePerGram] = useState('');
@@ -124,59 +125,80 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     }
   }, [type, buyDate, fdTenureYears, fdTenureMonths, fdTenureDays]);
 
-  const handleMfAmountChange = (val: string) => {
-    setMfInvestmentAmount(val);
-    const amt = parseFloat(val);
-    const nav = parseFloat(mfNav);
-    if (!isNaN(amt) && !isNaN(nav) && nav > 0) {
-      const computedUnits = amt / nav;
-      const unitsStr = computedUnits.toFixed(4);
-      setMfUnits(unitsStr);
-      setQuantity(unitsStr);
-    } else {
-      setMfUnits('');
-      setQuantity('');
+  const handleMfFieldChange = (field: 'amount' | 'nav' | 'units', val: string) => {
+    // 1. Update the field's own state immediately
+    if (field === 'amount') {
+      setMfInvestmentAmount(val);
+    } else if (field === 'nav') {
+      setMfNav(val);
+      setBuyPrice(val);
+    } else if (field === 'units') {
+      setMfUnits(val);
+      setQuantity(val);
     }
+
+    // 2. Update edit history
+    const nextHistory = [field, ...mfEditHistory.filter(f => f !== field)];
+    setMfEditHistory(nextHistory);
+
+    // 3. Determine values for calculation
+    const currentValues = {
+      amount: field === 'amount' ? val : mfInvestmentAmount,
+      nav: field === 'nav' ? val : mfNav,
+      units: field === 'units' ? val : mfUnits
+    };
+
+    const activeField = nextHistory[0];     // The one currently being edited (user input)
+    const secondaryField = nextHistory[1];  // The other user-defined input
+    const dependentField = nextHistory[2];  // The field to be calculated
+
+    const vActive = parseFloat(currentValues[activeField]);
+    const vSecondary = parseFloat(currentValues[secondaryField]);
+
+    if (isNaN(vActive) || isNaN(vSecondary) || vActive <= 0 || vSecondary <= 0) {
+      // If either input is invalid or <= 0, we don't calculate dependent fields aggressively.
+      // E.g., if typing "0." or intermediate empty states, do not trigger NaN/Infinity updates.
+      return;
+    }
+
+    // 4. Calculate dependent field
+    if (dependentField === 'amount') {
+      // amount = nav * units
+      const computedVal = vActive * vSecondary;
+      setMfInvestmentAmount(computedVal.toFixed(2));
+    } else if (dependentField === 'units') {
+      // units = amount / nav
+      const amtVal = activeField === 'amount' ? vActive : vSecondary;
+      const navVal = activeField === 'nav' ? vActive : vSecondary;
+      if (navVal > 0) {
+        const computedVal = amtVal / navVal;
+        const unitsStr = computedVal.toFixed(4);
+        setMfUnits(unitsStr);
+        setQuantity(unitsStr);
+      }
+    } else if (dependentField === 'nav') {
+      // nav = amount / units
+      const amtVal = activeField === 'amount' ? vActive : vSecondary;
+      const unitsVal = activeField === 'units' ? vActive : vSecondary;
+      if (unitsVal > 0) {
+        const computedVal = amtVal / unitsVal;
+        const navStr = computedVal.toFixed(4);
+        setMfNav(navStr);
+        setBuyPrice(navStr);
+      }
+    }
+  };
+
+  const handleMfAmountChange = (val: string) => {
+    handleMfFieldChange('amount', val);
   };
 
   const handleMfNavChange = (val: string) => {
-    setMfNav(val);
-    setBuyPrice(val);
-    const nav = parseFloat(val);
-
-    // Check if we have amount, if so update units
-    if (mfInvestmentAmount && !isNaN(nav) && nav > 0) {
-      const amt = parseFloat(mfInvestmentAmount);
-      if (!isNaN(amt)) {
-        const computedUnits = amt / nav;
-        const unitsStr = computedUnits.toFixed(4);
-        setMfUnits(unitsStr);
-        setQuantity(unitsStr);
-        return;
-      }
-    }
-
-    // Check if we have units, if so update amount
-    if (mfUnits && !isNaN(nav)) {
-      const units = parseFloat(mfUnits);
-      if (!isNaN(units)) {
-        const computedAmt = units * nav;
-        setMfInvestmentAmount(computedAmt.toFixed(2));
-      }
-    }
+    handleMfFieldChange('nav', val);
   };
 
   const handleMfUnitsChange = (val: string) => {
-    setMfUnits(val);
-    setQuantity(val);
-    const units = parseFloat(val);
-    const nav = parseFloat(mfNav);
-    if (!isNaN(units) && !isNaN(nav)) {
-      const computedAmt = units * nav;
-      setMfInvestmentAmount(computedAmt.toFixed(2));
-    } else {
-      setMfInvestmentAmount('');
-    }
+    handleMfFieldChange('units', val);
   };
 
   // ── IPO-specific fields ────────────────────────────────────────────
@@ -201,6 +223,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     if (!isOpen) return;
     setErrors({});
     setIsSubmitting(false);
+    setMfEditHistory(['amount', 'nav', 'units']);
 
     if (investmentToEdit) {
       const mappedType =
@@ -274,10 +297,13 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         );
 
         if (resolvedType === 'Mutual Fund') {
-          const amtVal = qtyVal * priceVal;
-          setMfUnits(qtyVal ? qtyVal.toString() : '');
-          setMfNav(priceVal ? priceVal.toString() : '');
-          setMfInvestmentAmount(amtVal ? amtVal.toFixed(2) : '');
+          const mfUnitsVal = investmentToEdit.units !== undefined ? investmentToEdit.units : qtyVal;
+          const mfNavVal = investmentToEdit.nav !== undefined ? investmentToEdit.nav : priceVal;
+          const mfAmtVal = investmentToEdit.investedAmount !== undefined ? investmentToEdit.investedAmount : (mfUnitsVal * mfNavVal);
+
+          setMfUnits(mfUnitsVal ? mfUnitsVal.toString() : '');
+          setMfNav(mfNavVal ? mfNavVal.toString() : '');
+          setMfInvestmentAmount(mfAmtVal ? Number(mfAmtVal).toFixed(2) : '');
           setCurrentPricePerGram('');
           setManuallyEnteredInvestedAmount('');
           setManuallyEnteredCurrentValue('');
@@ -614,7 +640,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
         isDemo: false,
         customAssetType: type === 'Other' ? customType.trim() : undefined,
         customBroker: broker === 'Other' ? customBroker.trim() : undefined,
-        ...(isMF ? { units: qtyNum, nav: priceNum, investedAmount: standardInvestedAmount } : {}),
+        ...(isMF ? { units: qtyNum, nav: priceNum, investedAmount: parseFloat(mfInvestmentAmount) || standardInvestedAmount } : {}),
         ...(isCommodity ? {
           weightGrams: qtyNum,
           weightUnit: weightUnit,
