@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
-import { calculateMonthlyInvestments, calculateMonthlyInvested } from '../services/portfolioCalculationService';
+import { calculateMonthlyInvestments, calculateMonthlyInvested, isDemoInvestment } from '../services/portfolioCalculationService';
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,7 +17,7 @@ import { InvestmentModal } from '../components/InvestmentModal';
 
 // Monthly Savings Planner – uses real investment data only
 export const Monthly: React.FC = () => {
-  const { monthlyTarget, formatCurrency, setMonthlyTarget, setDataTypeFilter } = useApp();
+  const { monthlyTarget, formatCurrency, setMonthlyTarget, setDataTypeFilter, investments, transactions: allTransactions } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTarget, setNewTarget] = useState('');
   const [targetError, setTargetError] = useState('');
@@ -31,13 +31,18 @@ export const Monthly: React.FC = () => {
   const currentYear = currentDate.getFullYear();
   const currentMonthIdx = currentDate.getMonth(); // 0‑based index
 
-  const { holdings, transactions } = usePortfolio();
+  // Holdings still used for display (active count etc.) – calculation uses raw data
+  const { holdings } = usePortfolio();
+
+  // AUTHORITATIVE source: raw non-demo investments and transactions
+  const realInvestments = investments.filter(inv => !isDemoInvestment(inv));
+  const realTransactions = allTransactions.filter(tx => !tx.isDemo);
 
   // Monthly data for the current year, including target per month
-  const monthlyData = calculateMonthlyInvestments(transactions, holdings, currentYear, monthlyTarget);
+  const monthlyData = calculateMonthlyInvestments(realTransactions, holdings, currentYear, monthlyTarget);
 
-  // Helper calculations using centralized monthly invested calculator
-  const investedThisMonth = calculateMonthlyInvested(transactions, holdings, currentYear, currentMonthIdx);
+  // Helper calculations using centralized monthly invested calculator (same inputs as Dashboard/Portfolio)
+  const investedThisMonth = calculateMonthlyInvested(realTransactions, realInvestments, currentYear, currentMonthIdx);
   const remainingThisMonth = monthlyTarget > 0 ? monthlyTarget - investedThisMonth : 0;
   const progressPercent = monthlyTarget > 0 ? (investedThisMonth / monthlyTarget) * 100 : 0;
 

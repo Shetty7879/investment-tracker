@@ -11,7 +11,7 @@ import {
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
 import { getAssetTypeBadgeStyle, getBrokerBadgeStyle } from '../utils/badgeStyles';
-import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested, calculateTotalInvestedByPlatform } from '../services/portfolioCalculationService';
+import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested, calculateTotalInvestedByPlatform, isDemoInvestment } from '../services/portfolioCalculationService';
 
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
@@ -33,14 +33,16 @@ export const Dashboard: React.FC = () => {
     formatCurrency,
     navigateTo,
     moneyRecords,
+    investments,       // Raw investment records — source of truth for calculateTotalInvested
+    transactions: allTransactions, // Raw transaction records — source of truth for calculateMonthlyInvested
   } = useApp();
 
   // Modal State
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [isMoneyModalOpen, setIsMoneyModalOpen] = useState(false);
 
-  // Invoke shared calculation hook
-  const { holdings, transactions: activeHoldingsTxs } = usePortfolio();
+  // Holdings computed by the hook (used for display list, active count, and platform map)
+  const { holdings } = usePortfolio();
 
   // Helper to determine active status
   const isHoldingActive = (h: any): boolean => {
@@ -56,16 +58,21 @@ export const Dashboard: React.FC = () => {
     return h.quantity > 0;
   };
 
-  // Calculate basic details: Number of Investments
-  const numberOfInvestments = holdings.filter(isHoldingActive).length;
-  const totalInvestedAmount = calculateTotalInvested(holdings, activeHoldingsTxs);
-  console.debug("DASHBOARD RENDER: calculateTotalInvested =", totalInvestedAmount);
+  // Filter raw investments and transactions to real (non-demo) records — matching what Portfolio uses
+  const realInvestments = investments.filter(inv => !isDemoInvestment(inv));
+  const realTransactions = allTransactions.filter(tx => !tx.isDemo);
 
-  // Monthly Invested Calculation
+  // Calculate basic details: Number of Investments (from holdings which are owner/date filtered)
+  const numberOfInvestments = holdings.filter(isHoldingActive).length;
+
+  // AUTHORITATIVE total invested — uses raw investments + raw transactions, NOT holdings
+  // This ensures Dashboard matches Portfolio exactly (both call the same function with identical inputs)
+  const totalInvestedAmount = calculateTotalInvested(realInvestments, realTransactions);
+
+  // Monthly Invested Calculation — same authoritative engine, same inputs
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
-  const monthlyInvestedAmount = calculateMonthlyInvested(activeHoldingsTxs, holdings, currentYear, currentMonthIdx);
-  console.debug("DASHBOARD RENDER: calculateMonthlyInvested =", monthlyInvestedAmount);
+  const monthlyInvestedAmount = calculateMonthlyInvested(realTransactions, realInvestments, currentYear, currentMonthIdx);
 
 
 
@@ -117,7 +124,7 @@ export const Dashboard: React.FC = () => {
 
   // Group investments by platform using the canonical calculation engine
   // This guarantees: sum of platform totals === totalInvestedAmount
-  const platformTotalsMap = calculateTotalInvestedByPlatform(holdings, activeHoldingsTxs);
+  const platformTotalsMap = calculateTotalInvestedByPlatform(realInvestments, realTransactions);
 
   const platformInvestments = Object.entries(platformTotalsMap)
     .map(([name, amount]) => ({ name, amount }))

@@ -4,7 +4,7 @@ import { usePortfolio } from '../hooks/usePortfolio';
 import { getInvestmentAge } from '../utils/calculations';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
 import { Wallet } from 'lucide-react';
-import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested } from '../services/portfolioCalculationService';
+import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested, isDemoInvestment } from '../services/portfolioCalculationService';
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
   'Stocks': 'Stock',
@@ -162,8 +162,8 @@ const renderPlatformBadges = (platformsString: string) => {
 };
 
 export const Portfolio: React.FC = () => {
-  const { formatCurrency } = useApp();
-  const { holdings, transactions: activeHoldingsTxs } = usePortfolio();
+  const { formatCurrency, investments, transactions: allTransactions } = useApp();
+  const { holdings } = usePortfolio();
   const [selectedCategory, setSelectedCategory] = React.useState<string>('All');
 
   const isHoldingActive = (h: any): boolean => {
@@ -256,14 +256,18 @@ export const Portfolio: React.FC = () => {
     ? consolidatedAssets
     : consolidatedAssets.filter(asset => asset.category === selectedCategory);
   
-  // Calculate summary values using centralized helpers
-  const totalInvested = calculateTotalInvested(holdings, activeHoldingsTxs);
+  // Calculate summary values using the AUTHORITATIVE engine (same as Dashboard)
+  // Raw investments + raw transactions are the single source of truth
+  const realInvestments = investments.filter(inv => !isDemoInvestment(inv));
+  const realTransactions = allTransactions.filter(tx => !tx.isDemo);
+
+  const totalInvested = calculateTotalInvested(realInvestments, realTransactions);
   const holdingsCount = activeHoldings.length;
 
-  // Monthly Invested Calculation
+  // Monthly Invested Calculation — same authoritative engine, same inputs as Dashboard
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
-  const monthlyInvestedAmount = calculateMonthlyInvested(activeHoldingsTxs, holdings, currentYear, currentMonthIdx);
+  const monthlyInvestedAmount = calculateMonthlyInvested(realTransactions, realInvestments, currentYear, currentMonthIdx);
 
   // Find top category by allocation
   const categoryAllocations: Record<string, number> = {};
