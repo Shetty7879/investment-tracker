@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import type { Goal } from '../types';
@@ -16,7 +16,9 @@ import {
   AlertCircle,
   PlusCircle,
   MinusCircle,
-  Link
+  Link as LinkIcon,
+  TrendingUp,
+  Award
 } from 'lucide-react';
 
 export const Goals: React.FC = () => {
@@ -24,7 +26,9 @@ export const Goals: React.FC = () => {
     goals,
     updateGoal,
     deleteGoal,
-    formatCurrency
+    formatCurrency,
+    dataTypeFilter,
+    showToast
   } = useApp();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,8 +36,6 @@ export const Goals: React.FC = () => {
 
   // Invoke shared calculation hook
   const { holdings } = usePortfolio();
-
-
 
   const handleEdit = (goal: Goal) => {
     setEditingGoal(goal);
@@ -43,10 +45,9 @@ export const Goals: React.FC = () => {
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to delete this financial goal?')) {
       deleteGoal(id);
+      showToast('Financial goal deleted successfully.', 'info');
     }
   };
-
-
 
   const handleAddNew = () => {
     setEditingGoal(null);
@@ -66,6 +67,7 @@ export const Goals: React.FC = () => {
           currentAmount: nextAmount,
           isCompleted: nextAmount >= goal.targetAmount
         });
+        showToast(`Added ${formatCurrency(val)} to "${goal.name}".`, 'success');
       } else {
         alert("Please enter a valid positive number.");
       }
@@ -84,13 +86,12 @@ export const Goals: React.FC = () => {
           currentAmount: nextAmount,
           isCompleted: nextAmount >= goal.targetAmount
         });
+        showToast(`Withdrew ${formatCurrency(val)} from "${goal.name}".`, 'info');
       } else {
         alert("Please enter a valid positive number.");
       }
     }
   };
-
-
 
   // Helper to calculate days remaining
   const getDaysRemaining = (dateStr?: string): { days: number; text: string; isOverdue: boolean } | null => {
@@ -125,30 +126,67 @@ export const Goals: React.FC = () => {
     'Other': { bg: 'bg-slate-500/10 dark:bg-slate-950/20', text: 'text-slate-600 dark:text-slate-400' },
   };
 
-  const typeFilteredGoals = goals.filter(g => !g.isDemo);
-  const filteredGoalMetrics = typeFilteredGoals.map(goal => calculateGoalMetrics(goal, holdings));
+  // Filter goals by dataTypeFilter ('All' | 'Real' | 'Demo')
+  const typeFilteredGoals = useMemo(() => {
+    return goals.filter(g => {
+      if (dataTypeFilter === 'Real' && g.isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !g.isDemo) return false;
+      return true;
+    });
+  }, [goals, dataTypeFilter]);
+
+  const filteredGoalMetrics = useMemo(() => {
+    return typeFilteredGoals.map(goal => calculateGoalMetrics(goal, holdings));
+  }, [typeFilteredGoals, holdings]);
+
+  // Overall Goal KPI Summary
+  const { totalTarget, totalProgress, completedCount, overallPercent } = useMemo(() => {
+    let targetSum = 0;
+    let progressSum = 0;
+    let done = 0;
+
+    typeFilteredGoals.forEach((goal, idx) => {
+      const metric = filteredGoalMetrics[idx];
+      if (metric) {
+        targetSum += metric.target;
+        const currentVal = goal.progressMode === 'Automatic' ? metric.currentValue : metric.contributed;
+        progressSum += currentVal;
+        if (goal.isCompleted || metric.progressPercent >= 100) {
+          done++;
+        }
+      }
+    });
+
+    const percent = targetSum > 0 ? Math.min(100, Math.round((progressSum / targetSum) * 100)) : 0;
+    return {
+      totalTarget: targetSum,
+      totalProgress: progressSum,
+      completedCount: done,
+      overallPercent: percent
+    };
+  }, [typeFilteredGoals, filteredGoalMetrics]);
 
   return (
-    <div className="space-y-6 animate-slide-in">
+    <div className="space-y-6 animate-slide-in pb-8">
       {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
             <Target className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold m-0">🎯 Financial Goals</h2>
-            <p className="text-sm text-slate-405 dark:text-slate-500 m-0">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white m-0">🎯 Financial Goals</h2>
+            <p className="text-sm text-slate-405 dark:text-slate-500 m-0 font-semibold">
               Create and manage milestones for liquid cash, property buys, or retirement.
             </p>
           </div>
         </div>
 
-        {/* Global Filter & Adding */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Global Action Button */}
+        <div className="flex items-center gap-3">
           <button
             onClick={handleAddNew}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors cursor-pointer shadow-lg shadow-indigo-650/15"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-sm transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
           >
             <Plus className="h-4 w-4" />
             <span>Create Goal</span>
@@ -156,34 +194,67 @@ export const Goals: React.FC = () => {
         </div>
       </div>
 
+      {/* Goal Summary KPI Section */}
+      {typeFilteredGoals.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Goal Targets</span>
+            <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{formatCurrency(totalTarget)}</div>
+            <p className="text-xs text-slate-400 font-semibold m-0">{typeFilteredGoals.length} tracked milestone{typeFilteredGoals.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Accumulated</span>
+            <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency(totalProgress)}</div>
+            <p className="text-xs text-slate-400 font-semibold m-0">Saved & linked portfolio value</p>
+          </div>
+
+          <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overall Completion</span>
+            <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              <span>{overallPercent}%</span>
+            </div>
+            <p className="text-xs text-slate-400 font-semibold m-0">Weighted goal completion</p>
+          </div>
+
+          <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Milestones Achieved</span>
+            <div className="text-2xl font-extrabold text-amber-500 flex items-center gap-1.5">
+              <Award className="h-5 w-5 text-amber-500" />
+              <span>{completedCount} / {typeFilteredGoals.length}</span>
+            </div>
+            <p className="text-xs text-slate-400 font-semibold m-0">Completed goals</p>
+          </div>
+        </div>
+      )}
+
       {/* Goal list grid */}
       {typeFilteredGoals.length === 0 ? (
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[400px]">
-          <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-550 mb-6">
-            <Target className="h-8 w-8" />
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[350px]">
+          <div className="h-16 w-16 rounded-full bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-550 mb-4">
+            <Target className="h-8 w-8 text-indigo-500" />
           </div>
           
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-            No financial goals yet
+            No financial goals tracked yet
           </h3>
-          <p className="text-sm text-slate-405 dark:text-slate-555 max-w-sm mx-auto mb-8 font-semibold">
+          <p className="text-sm text-slate-405 dark:text-slate-555 max-w-sm mx-auto mb-6 font-semibold">
             Start building your financial map by defining your first cash milestone.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={handleAddNew}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-semibold text-sm cursor-pointer shadow-lg shadow-indigo-650/15"
-            >
-              <Plus className="h-4 w-4" />
-              <span>+ Create Goal</span>
-            </button>
-          </div>
+          <button
+            onClick={handleAddNew}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-sm cursor-pointer shadow-sm transition-all"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Goal</span>
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-semibold">
           {typeFilteredGoals.map((goal, idx) => {
-            const metric = filteredGoalMetrics[idx] || {};
+            const metric = filteredGoalMetrics[idx] || { contributed: 0, currentValue: 0, target: 0, remaining: 0, progressPercent: 0 };
             const { contributed, currentValue, target, remaining, progressPercent } = metric;
             const daysData = getDaysRemaining(goal.targetDate);
             const style = categoryStyles[goal.category] || categoryStyles.Other;
@@ -205,7 +276,7 @@ export const Goals: React.FC = () => {
               >
                 {/* Card Header */}
                 <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider ${style.bg} ${style.text}`}>
                       {goal.category}
                     </span>
@@ -216,35 +287,34 @@ export const Goals: React.FC = () => {
                         DEMO
                       </span>
                     )}
- 
+
                     {/* Auto sync indicators */}
                     {goal.linkedAssetId && (
                       <span className="flex items-center gap-1 text-[9px] font-bold text-indigo-500 bg-indigo-500/5 px-2 py-0.5 rounded border border-indigo-500/10">
-                        <Link className="h-2.5 w-2.5" />
+                        <LinkIcon className="h-2.5 w-2.5" />
                         <span>{goal.progressMode === 'Automatic' ? 'AUTO-SYNCED' : 'LINKED'}</span>
                       </span>
                     )}
                   </div>
- 
-                  <div className="flex items-baseline justify-between gap-1.5 pt-1.5">
-                    <h4 className="text-base font-extrabold text-slate-900 dark:text-white m-0 truncate max-w-[170px]" title={goal.name}>
+
+                  <div className="flex items-start justify-between gap-2 pt-1.5">
+                    <h4 className="text-base font-extrabold text-slate-900 dark:text-white m-0 line-clamp-1 flex-1" title={goal.name}>
                       {goal.name}
                     </h4>
                     {isCompleted && (
-                      <CheckCircle className="h-4.5 w-4.5 text-emerald-500 flex-shrink-0" />
+                      <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
                     )}
                   </div>
- 
+
                   {goal.notes && (
                     <p className="text-[11px] text-slate-400 dark:text-slate-550 m-0 leading-relaxed font-medium line-clamp-2" title={goal.notes}>
                       {goal.notes}
                     </p>
                   )}
                 </div>
- 
+
                 {/* Progress stats */}
-                <div className="my-6 space-y-4">
-                  
+                <div className="my-5 space-y-4">
                   {/* Visual Progress Bar */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs font-semibold">
@@ -258,7 +328,7 @@ export const Goals: React.FC = () => {
                       />
                     </div>
                   </div>
- 
+
                   {/* Saved vs Target totals */}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 pt-3 border-t border-slate-100 dark:border-slate-850 text-xs">
                     <div>
@@ -269,6 +339,7 @@ export const Goals: React.FC = () => {
                         {formatCurrency(contributed)}
                       </span>
                     </div>
+
                     {goal.linkedAssetId ? (
                       <div>
                         <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">📈 Current Value</span>
@@ -284,6 +355,7 @@ export const Goals: React.FC = () => {
                         </span>
                       </div>
                     )}
+
                     {goal.linkedAssetId && (
                       <div>
                         <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">🎯 Target Amount</span>
@@ -292,6 +364,7 @@ export const Goals: React.FC = () => {
                         </span>
                       </div>
                     )}
+
                     <div>
                       <span className="block text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-550">Remaining</span>
                       <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
@@ -299,7 +372,7 @@ export const Goals: React.FC = () => {
                       </span>
                     </div>
                   </div>
- 
+
                   {/* Auto Synced Details Banner */}
                   {linkedHolding && (
                     <div className="bg-indigo-500/[0.02] border border-indigo-550/10 rounded-xl p-2.5 text-[10px] text-slate-450 dark:text-slate-400 flex items-center justify-between font-semibold">
@@ -328,22 +401,21 @@ export const Goals: React.FC = () => {
                       </span>
                     )}
                   </div>
-
                 </div>
 
                 {/* Card Actions */}
-                <div className="flex items-center justify-between gap-2 border-t border-slate-50 dark:border-slate-850 pt-4">
+                <div className="flex items-center justify-between gap-2 border-t border-slate-50 dark:border-slate-850 pt-4 flex-wrap">
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => handleEdit(goal)}
-                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 hover:border-indigo-500/20 transition-all cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all cursor-pointer"
                       title="Edit Goal"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(goal.id)}
-                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 hover:border-red-500/20 transition-all cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] text-slate-600 dark:text-slate-400 hover:text-red-655 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all cursor-pointer"
                       title="Delete Goal"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -379,7 +451,6 @@ export const Goals: React.FC = () => {
                     )}
                   </div>
                 </div>
-
               </div>
             );
           })}
