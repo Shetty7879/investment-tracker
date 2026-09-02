@@ -181,18 +181,22 @@ export const calculateHoldingMetrics = (
 
   if (isCommodityCategory(category)) {
     let manualInvested = 0;
-    if (inv.investedAmount !== undefined && inv.investedAmount !== null) {
+    const buyTxs = allTxs.filter(tx => tx.type === 'BUY');
+
+    if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0 && buyTxs.length <= 1) {
       const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
       if (!isNaN(parsed) && isFinite(parsed)) {
         manualInvested = parsed;
       }
-    } else {
-      const buyTxs = allTxs.filter(tx => tx.type === 'BUY');
-      if (buyTxs.length > 0) {
-        manualInvested = buyTxs.reduce((sum, tx) => {
-          const amt = typeof tx.amount === 'number' ? tx.amount : parseFloat(tx.amount as any);
-          return sum + (isNaN(amt) ? 0 : amt);
-        }, 0);
+    } else if (buyTxs.length > 0) {
+      manualInvested = buyTxs.reduce((sum, tx) => {
+        const cost = getEffectiveTransactionCost(tx, inv);
+        return sum + cost;
+      }, 0);
+    } else if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+      const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+      if (!isNaN(parsed) && isFinite(parsed)) {
+        manualInvested = parsed;
       }
     }
 
@@ -607,10 +611,13 @@ export const getEffectiveTransactionCost = (tx: Transaction, inv: Investment): n
   }
   const isCommodity = isCommodityCategory(category);
   if (isCommodity) {
-    if (tx.amount !== undefined && tx.amount !== null && tx.amount >= 1) {
+    if (typeof tx.price === 'number' && tx.price > 0) {
+      return tx.price;
+    }
+    if (typeof tx.amount === 'number' && tx.amount > 0) {
       return tx.amount;
     }
-    return tx.price;
+    return 0;
   }
   return tx.amount ?? (tx.quantity * tx.price);
 };
@@ -655,17 +662,16 @@ export const calculateTotalInvested = (
       // else contribution stays 0
 
     } else if (isCommodityCategory(category)) {
-      // For commodities, calculateHoldingMetrics uses inv.investedAmount directly.
-      // We must match that — the tx.amount field stores qty*price (a meaningless product
-      // in PhonePe format), while tx.price stores the actual rupees invested per purchase.
-      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+      if (buyTxs.length > 0) {
+        contribution = buyTxs.reduce((sum, tx) => {
+          const cost = getEffectiveTransactionCost(tx, inv);
+          return sum + cost + (tx.charges ?? 0);
+        }, 0);
+      } else if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
         const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
         if (!isNaN(parsed) && isFinite(parsed)) {
           contribution = parsed;
         }
-      } else if (buyTxs.length > 0) {
-        // Fallback: sum tx.price (= rupee amount paid) per BUY transaction
-        contribution = buyTxs.reduce((sum, tx) => sum + (tx.price ?? 0) + (tx.charges ?? 0), 0);
       } else {
         const qty = inv.weightGrams ?? inv.quantity ?? 1;
         const price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
@@ -726,11 +732,14 @@ export const calculateTotalInvestedByPlatform = (
         contribution = allottedQty * issuePrice + (inv.charges ?? 0);
       }
     } else if (isCommodityCategory(category)) {
-      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+      if (buyTxs.length > 0) {
+        contribution = buyTxs.reduce((sum, tx) => {
+          const cost = getEffectiveTransactionCost(tx, inv);
+          return sum + cost + (tx.charges ?? 0);
+        }, 0);
+      } else if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
         const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
         if (!isNaN(parsed) && isFinite(parsed)) contribution = parsed;
-      } else if (buyTxs.length > 0) {
-        contribution = buyTxs.reduce((sum, tx) => sum + (tx.price ?? 0) + (tx.charges ?? 0), 0);
       } else {
         const qty = inv.weightGrams ?? inv.quantity ?? 1;
         const price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;

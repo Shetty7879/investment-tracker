@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import {
@@ -11,7 +11,14 @@ import {
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
 import { getAssetTypeBadgeStyle, getBrokerBadgeStyle } from '../utils/badgeStyles';
-import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested, calculateTotalInvestedByPlatform, isDemoInvestment } from '../services/portfolioCalculationService';
+import {
+  isCommodityCategory,
+  calculateMonthlyInvested,
+  calculateTotalInvested,
+  calculateTotalInvestedByPlatform,
+  isDemoInvestment,
+  isDemoTransaction
+} from '../services/portfolioCalculationService';
 
 
 const REVERSE_TYPE_MAPPING: Record<string, string> = {
@@ -33,8 +40,10 @@ export const Dashboard: React.FC = () => {
     formatCurrency,
     navigateTo,
     moneyRecords,
-    investments,       // Raw investment records — source of truth for calculateTotalInvested
-    transactions: allTransactions, // Raw transaction records — source of truth for calculateMonthlyInvested
+    investments,
+    transactions: allTransactions,
+    dataTypeFilter,
+    ownerFilter
   } = useApp();
 
   // Modal State
@@ -58,21 +67,38 @@ export const Dashboard: React.FC = () => {
     return h.quantity > 0;
   };
 
-  // Filter raw investments and transactions to real (non-demo) records — matching what Portfolio uses
-  const realInvestments = investments.filter(inv => !isDemoInvestment(inv));
-  const realTransactions = allTransactions.filter(tx => !tx.isDemo);
+  // Filter raw investments and transactions matching active dataTypeFilter and ownerFilter
+  const filteredInvs = useMemo(() => {
+    return investments.filter(inv => {
+      const isDemo = isDemoInvestment(inv);
+      if (dataTypeFilter === 'Real' && isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !isDemo) return false;
+      if (ownerFilter !== 'All' && inv.owner !== ownerFilter) return false;
+      return true;
+    });
+  }, [investments, dataTypeFilter, ownerFilter]);
+
+  const filteredTxs = useMemo(() => {
+    return allTransactions.filter(tx => {
+      const isDemo = isDemoTransaction(tx, investments);
+      if (dataTypeFilter === 'Real' && isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !isDemo) return false;
+      const parent = investments.find(inv => inv.id === tx.investmentId);
+      if (parent && ownerFilter !== 'All' && parent.owner !== ownerFilter) return false;
+      return true;
+    });
+  }, [allTransactions, investments, dataTypeFilter, ownerFilter]);
 
   // Calculate basic details: Number of Investments (from holdings which are owner/date filtered)
   const numberOfInvestments = holdings.filter(isHoldingActive).length;
 
-  // AUTHORITATIVE total invested — uses raw investments + raw transactions, NOT holdings
-  // This ensures Dashboard matches Portfolio exactly (both call the same function with identical inputs)
-  const totalInvestedAmount = calculateTotalInvested(realInvestments, realTransactions);
+  // AUTHORITATIVE total invested — single source of truth
+  const totalInvestedAmount = calculateTotalInvested(filteredInvs, filteredTxs);
 
-  // Monthly Invested Calculation — same authoritative engine, same inputs
+  // Monthly Invested Calculation — same authoritative engine
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
-  const monthlyInvestedAmount = calculateMonthlyInvested(realTransactions, realInvestments, currentYear, currentMonthIdx);
+  const monthlyInvestedAmount = calculateMonthlyInvested(filteredTxs, filteredInvs, currentYear, currentMonthIdx);
 
 
 
@@ -124,7 +150,7 @@ export const Dashboard: React.FC = () => {
 
   // Group investments by platform using the canonical calculation engine
   // This guarantees: sum of platform totals === totalInvestedAmount
-  const platformTotalsMap = calculateTotalInvestedByPlatform(realInvestments, realTransactions);
+  const platformTotalsMap = calculateTotalInvestedByPlatform(filteredInvs, filteredTxs);
 
   const platformInvestments = Object.entries(platformTotalsMap)
     .map(([name, amount]) => ({ name, amount }))

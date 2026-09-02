@@ -13,6 +13,8 @@ import {
   saveFridayTrackData,
   migrateLocalStorageToSupabase
 } from '../services/fridaytrackDataService';
+import type { ProfileData as UserProfile } from '../components/ui/edit-profile';
+export type { UserProfile };
 
 const migrateMoneyRecords = (records: any[]): MoneyRecord[] => {
   if (!records || !Array.isArray(records)) return [];
@@ -95,13 +97,36 @@ interface AppContextType {
   lastSyncedAt: string | null;
   migrateLocalData: () => Promise<boolean>;
   isSyncing: boolean;
+  userProfile: UserProfile;
+  updateUserProfile: (profile: UserProfile) => Promise<boolean>;
+  isEditProfileOpen: boolean;
+  openEditProfile: () => void;
+  closeEditProfile: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
+const DEFAULT_PROFILE: UserProfile = {
+  fullName: 'Investor Profile',
+  email: 'investor@fridaytrack.app',
+  currency: 'INR',
+  investorTier: 'Free Tier',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop',
+  lastUpdated: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [userProfile, setUserProfileState] = useState<UserProfile>(() => {
+    return storage.get<UserProfile>('user_profile_pref', DEFAULT_PROFILE);
+  });
+
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+
+  const openEditProfile = () => setIsEditProfileOpen(true);
+  const closeEditProfile = () => setIsEditProfileOpen(false);
+
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return storage.get<'dark' | 'light'>('theme_pref', 'light');
   });
@@ -180,7 +205,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     nextInvs: Investment[],
     nextTxs: Transaction[],
     nextGoals: Goal[],
-    nextMoney: MoneyRecord[]
+    nextMoney: MoneyRecord[],
+    profileOverride?: UserProfile
   ): Promise<boolean> => {
     try {
       const success = await saveFridayTrackData({
@@ -188,7 +214,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transactions: nextTxs,
         goals: nextGoals,
         money_records: nextMoney,
-        preferences: { theme, currency, monthlyTarget }
+        preferences: {
+          theme,
+          currency,
+          monthlyTarget,
+          userProfile: profileOverride || userProfile
+        }
       });
       if (success) {
         setLastSyncedAt(new Date().toISOString());
@@ -199,6 +230,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(err.message || 'Failed to sync with FridayTrack cloud database.', 'warning');
       return false;
     }
+  };
+
+  const updateUserProfile = async (profile: UserProfile): Promise<boolean> => {
+    setUserProfileState(profile);
+    storage.set('user_profile_pref', profile);
+    if (profile.currency !== currency) {
+      setCurrencyState(profile.currency);
+      storage.set('currency_pref', profile.currency);
+    }
+    const success = await syncWithCloud(investments, transactions, goals, moneyRecords, profile);
+    if (success) {
+      showToast('Profile updated successfully!', 'success');
+    }
+    setIsEditProfileOpen(false);
+    return success;
   };
 
   // Initial cloud loading and migration flow
@@ -226,6 +272,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             if (typeof prefs.monthlyTarget === 'number') {
               setMonthlyTargetState(prefs.monthlyTarget);
+            }
+            if (prefs.userProfile && typeof prefs.userProfile === 'object') {
+              setUserProfileState(prefs.userProfile);
+              storage.set('user_profile_pref', prefs.userProfile);
             }
           }
         }
@@ -1144,7 +1194,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isCloudDataLoading,
         lastSyncedAt,
         migrateLocalData,
-        isSyncing
+        isSyncing,
+        userProfile,
+        updateUserProfile,
+        isEditProfileOpen,
+        openEditProfile,
+        closeEditProfile
       }}
     >
       {children}

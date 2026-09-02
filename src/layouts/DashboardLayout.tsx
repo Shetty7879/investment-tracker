@@ -8,14 +8,14 @@ import {
   Target,
   BarChart3,
   Settings,
-  Sun,
-  Moon,
   User,
   Coins,
   Wallet,
   Menu,
   X
 } from 'lucide-react';
+import { EditProfile } from '../components/ui/edit-profile';
+import { SwitchMode } from '../components/ui/switch-mode';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -30,7 +30,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     const timer = setTimeout(() => setShowSplash(false), timeout);
     return () => clearTimeout(timer);
   }, []);
-  const { theme, toggleTheme, activeTab, navigateTo } = useApp();
+  const { activeTab, navigateTo, userProfile, updateUserProfile, isEditProfileOpen, openEditProfile, closeEditProfile } = useApp();
 
   const navigationItems = [
     { id: 'dashboard', name: '📊 Dashboard', icon: LayoutDashboard },
@@ -124,17 +124,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
         <div className="p-4 border-t border-slate-150 dark:border-slate-855 bg-slate-50/50 dark:bg-slate-900/10">
           <button
             onClick={() => {
-              navigateTo('settings');
+              openEditProfile();
               if (isMobile) setIsMobileSidebarOpen(false);
             }}
-            className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50 text-left transition-colors"
+            className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 text-left transition-all cursor-pointer group"
+            title="Edit Profile"
           >
-            <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-650 dark:text-indigo-400">
-              <User className="h-5 w-5" />
-            </div>
-            <div className="overflow-hidden">
-              <span className="block font-semibold text-sm truncate text-slate-900 dark:text-white">Investor Profile</span>
-              <span className="block text-[11px] text-slate-400 dark:text-slate-500 truncate">Free Tier</span>
+            <img
+              src={userProfile.avatarUrl}
+              alt="Profile Avatar"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop';
+              }}
+              className="h-10 w-10 rounded-full object-cover shrink-0 ring-2 ring-indigo-500/20 group-hover:ring-indigo-500 transition-all"
+            />
+            <div className="overflow-hidden flex-1">
+              <span className="block font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                {userProfile.fullName}
+              </span>
+              <span className="block text-[11px] text-slate-400 dark:text-slate-500 truncate font-semibold">
+                {userProfile.investorTier || 'Free Tier'}
+              </span>
             </div>
           </button>
         </div>
@@ -196,20 +206,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Theme Toggle Button */}
-              <button
-                onClick={toggleTheme}
-                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] hover:bg-indigo-50/40 hover:border-indigo-500/20 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all active:scale-95 shadow-sm cursor-pointer"
-                aria-label={theme === 'dark' ? 'Activate Light Mode' : 'Activate Dark Mode'}
-              >
-                {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-500" />}
-              </button>
+              {/* Watermelon SwitchMode Theme Toggle */}
+              <SwitchMode width={64} height={32} />
 
               {/* Profile Shortcut */}
               <button
-                onClick={() => navigateTo('settings')}
+                onClick={openEditProfile}
                 className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0e111a] hover:bg-indigo-50/40 hover:border-indigo-500/20 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-all active:scale-95 shadow-sm cursor-pointer"
-                aria-label="Profile Settings"
+                aria-label="Edit Profile"
+                title="Edit Profile"
               >
                 <User className="h-5 w-5" />
               </button>
@@ -246,6 +251,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           );
         })}
       </nav>
+
+      {/* User Profile Editing Modal */}
+      <EditProfile
+        isOpen={isEditProfileOpen}
+        onClose={closeEditProfile}
+        initialData={userProfile}
+        onSave={(updated) => updateUserProfile(updated)}
+      />
     </div>
   );
 };

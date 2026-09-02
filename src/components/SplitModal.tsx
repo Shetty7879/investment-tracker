@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import type { Investment } from '../types';
@@ -112,9 +113,9 @@ export const SplitModal: React.FC<SplitModalProps> = ({
   const displayType = investment.category === 'Stocks' || investment.assetType === 'Stocks' ? 'Stock' : 'ETF';
   const unitLabel = displayType === 'Stock' ? 'shares' : 'units';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm overflow-y-auto font-semibold animate-fade-in">
-      <div className="relative w-full max-w-lg bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl shadow-2xl flex flex-col max-h-[95vh] animate-modal-enter">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-sm overflow-y-auto font-semibold animate-fade-in">
+      <div className="relative w-full max-w-lg bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl shadow-2xl flex flex-col max-h-[95vh] animate-modal-enter z-[10000]">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-150 dark:border-slate-855">
@@ -291,6 +292,7 @@ export const SplitModal: React.FC<SplitModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

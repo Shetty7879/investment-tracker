@@ -1,60 +1,18 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
-import { getInvestmentAge } from '../utils/calculations';
+import type { Investment } from '../types';
+import { calculateTotalInvested, calculateMonthlyInvested, isDemoInvestment, isDemoTransaction } from '../services/portfolioCalculationService';
+import { getConsolidatedHoldings, isHoldingActive } from '../utils/consolidation';
+import type { ConsolidatedHolding } from '../utils/consolidation';
+import { Wallet, History, PlusCircle, MinusCircle, Scissors, Edit2, Trash2 } from 'lucide-react';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
-import { Wallet } from 'lucide-react';
-import { isCommodityCategory, calculateMonthlyInvested, calculateTotalInvested, isDemoInvestment } from '../services/portfolioCalculationService';
-
-const REVERSE_TYPE_MAPPING: Record<string, string> = {
-  'Stocks': 'Stock',
-  'ETFs': 'ETF',
-  'IPOs': 'IPO',
-  'Mutual Funds': 'Mutual Fund',
-  'Gold': 'Digital Gold',
-  'Silver': 'Digital Silver',
-  'Platinum': 'Digital Platinum',
-  'Crypto': 'Crypto',
-  'Fixed Deposits': 'Fixed Deposit',
-  'Bond': 'Bond',
-  'Other': 'Other'
-};
-
-const normalizePortfolioCategory = (cat: string | undefined): string => {
-  if (!cat) return 'Other';
-  const clean = cat.trim();
-  const lower = clean.toLowerCase();
-  
-  if (lower === 'stock' || lower === 'stocks') return 'Stocks';
-  if (lower === 'etf' || lower === 'etfs') return 'ETFs';
-  if (lower === 'mutual fund' || lower === 'mutual funds') return 'Mutual Funds';
-  if (lower === 'ipo' || lower === 'ipos') return 'IPOs';
-  if (lower === 'gold' || lower === 'digital gold') return 'Digital Gold';
-  if (lower === 'silver' || lower === 'digital silver') return 'Digital Silver';
-  if (lower === 'platinum' || lower === 'digital platinum') return 'Digital Platinum';
-  
-  return clean;
-};
-
-const getCategoryValue = (inv: any): string => {
-  const baseCat = inv.category || inv.assetType;
-  if (!baseCat || baseCat.trim().toLowerCase() === 'other') {
-    return inv.customAssetType || 'Other';
-  }
-  return baseCat;
-};
-
-const getAssetKey = (inv: any) => {
-  const category = (inv.category || inv.assetType || 'Other').trim().toUpperCase();
-  if (category === 'STOCKS' || category === 'ETFS') {
-    const symbol = (inv.symbol || '').trim().toUpperCase();
-    if (symbol) {
-      return `${category}_SYM_${symbol}`;
-    }
-  }
-  const name = (inv.assetName || '').trim().toUpperCase();
-  return `${category}_NAME_${name}`;
-};
+import { TransactionModal } from '../components/TransactionModal';
+import { InvestmentModal } from '../components/InvestmentModal';
+import { SplitModal } from '../components/SplitModal';
+import { PlatformBadge } from '../components/PlatformBadge';
+import { InlineDisclosureMenu } from '../components/ui/inline-disclosure-menu';
+import { ContinuousPagination } from '../components/ui/continuous-pagination';
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '—';
@@ -70,211 +28,129 @@ const formatDate = (dateStr: string) => {
   return dateStr;
 };
 
-const PLATFORM_STYLES: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-  'PhonePe': {
-    bg: 'bg-purple-500/10 dark:bg-purple-950/20',
-    text: 'text-purple-700 dark:text-purple-400',
-    border: 'border-purple-200/50 dark:border-purple-900/30',
-    icon: '🟣'
-  },
-  'Dhan': {
-    bg: 'bg-emerald-500/10 dark:bg-emerald-950/20',
-    text: 'text-emerald-700 dark:text-emerald-400',
-    border: 'border-emerald-200/50 dark:border-emerald-900/30',
-    icon: '🟢'
-  },
-  'Groww': {
-    bg: 'bg-teal-500/10 dark:bg-teal-950/20',
-    text: 'text-teal-700 dark:text-teal-400',
-    border: 'border-teal-200/50 dark:border-teal-900/30',
-    icon: '🔵'
-  },
-  'Zerodha': {
-    bg: 'bg-orange-500/10 dark:bg-orange-950/20',
-    text: 'text-orange-700 dark:text-orange-400',
-    border: 'border-orange-200/50 dark:border-orange-900/30',
-    icon: '🟠'
-  },
-  'Lemon': {
-    bg: 'bg-yellow-500/10 dark:bg-yellow-950/20',
-    text: 'text-yellow-700 dark:text-yellow-400',
-    border: 'border-yellow-200/50 dark:border-yellow-900/30',
-    icon: '🟡'
-  },
-  'Univest': {
-    bg: 'bg-blue-500/10 dark:bg-blue-950/20',
-    text: 'text-blue-700 dark:text-blue-400',
-    border: 'border-blue-200/50 dark:border-blue-900/30',
-    icon: '🔵'
-  },
-  'FamPay': {
-    bg: 'bg-pink-500/10 dark:bg-pink-950/20',
-    text: 'text-pink-700 dark:text-pink-400',
-    border: 'border-pink-200/50 dark:border-pink-900/30',
-    icon: '🔴'
-  },
-  'Bank': {
-    bg: 'bg-slate-500/10 dark:bg-slate-900/40',
-    text: 'text-slate-700 dark:text-slate-400',
-    border: 'border-slate-200/50 dark:border-slate-800/50',
-    icon: '🏦'
-  }
-};
-
-const DEFAULT_PLATFORM_STYLE = {
-  bg: 'bg-slate-500/10 dark:bg-slate-950/20',
-  text: 'text-slate-700 dark:text-slate-400',
-  border: 'border-slate-200/50 dark:border-slate-800/30',
-  icon: '🔌'
-};
-
-interface PlatformBadgeProps {
-  name: string;
-}
-
-const PlatformBadge: React.FC<PlatformBadgeProps> = ({ name }) => {
-  const cleanName = name.trim();
-  const style = PLATFORM_STYLES[cleanName] || {
-    ...DEFAULT_PLATFORM_STYLE,
-    icon: cleanName.toLowerCase().includes('bank') ? '🏦' : '🔌'
-  };
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] border text-xs font-semibold leading-none shadow-sm cursor-default transition-all hover:scale-[1.02] ${style.bg} ${style.text} ${style.border}`}>
-      <span className="text-[13px] select-none leading-none flex items-center justify-center h-3.5 w-3.5">{style.icon}</span>
-      <span>{cleanName}</span>
-    </span>
-  );
-};
-
-const renderPlatformBadges = (platformsString: string) => {
-  if (!platformsString || !platformsString.trim()) {
-    return <PlatformBadge name="Other" />;
-  }
-  const list = platformsString.split(',').map(p => p.trim()).filter(Boolean);
-  return (
-    <div className="flex flex-wrap gap-1.5 items-center justify-start py-0.5">
-      {list.map(name => (
-        <PlatformBadge key={name} name={name} />
-      ))}
-    </div>
-  );
-};
-
 export const Portfolio: React.FC = () => {
-  const { formatCurrency, investments, transactions: allTransactions } = useApp();
+  const { formatCurrency, investments, transactions: allTransactions, marketPrices, dataTypeFilter, ownerFilter, deleteInvestment, deleteTransaction, showToast } = useApp();
   const { holdings } = usePortfolio();
-  const [selectedCategory, setSelectedCategory] = React.useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  const isHoldingActive = (h: any): boolean => {
-    const category = h.category || h.assetType || '';
-    
-    if (category === 'IPOs') {
-      const status = h.ipoAllotmentStatus || h.allotmentStatus || 'Applied';
-      const inactiveStatuses = ['Not Allotted', 'Refund Pending', 'Refunded', 'Withdrawn', 'Sold'];
-      return !inactiveStatuses.includes(status);
-    }
-    
-    if (isCommodityCategory(category)) {
-      const hasWeight = h.quantity > 0;
-      const hasInvested = (h.investedAmount ?? 0) > 0;
-      const hasCurrent = (h.currentValue ?? 0) > 0;
-      return hasWeight || hasInvested || hasCurrent;
-    }
-    
-    return h.quantity > 0;
-  };
+  // Transactions State
+  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [selectedHolding, setSelectedHolding] = useState<ConsolidatedHolding | null>(null);
+  const [txModalMode, setTxModalMode] = useState<'BUY' | 'SELL'>('BUY');
 
-  const activeHoldings = holdings.filter(isHoldingActive);
+  // Edit and Split modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [selectedSplitInvestment, setSelectedSplitInvestment] = useState<Investment | null>(null);
 
-  const consolidatedMap: Record<string, any[]> = {};
-  activeHoldings.forEach(h => {
-    const key = getAssetKey(h);
-    if (!consolidatedMap[key]) {
-      consolidatedMap[key] = [];
-    }
-    consolidatedMap[key].push(h);
-  });
+  // Investment Details Pagination State (10 per page)
+  const ITEMS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
-  const consolidatedAssets = Object.entries(consolidatedMap).map(([key, group]) => {
-    let earliestDate = '';
-    group.forEach(h => {
-      const dateStr = h.buyDate || h.purchaseDate || h.applicationDate;
-      if (dateStr) {
-        if (!earliestDate || dateStr < earliestDate) {
-          earliestDate = dateStr;
-        }
-      }
+  // Separate Transaction Log Pagination State (10 transactions per page)
+  const TX_ITEMS_PER_PAGE = 10;
+  const [txCurrentPage, setTxCurrentPage] = useState<number>(1);
+
+  // Reset investment page to 1 whenever category filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory]);
+
+  // Reset transaction page to 1 whenever selected holding changes
+  useEffect(() => {
+    setTxCurrentPage(1);
+  }, [selectedHolding?.holdingKey]);
+
+  // Consolidated Holdings
+  const consolidatedHoldings = useMemo(() => {
+    return getConsolidatedHoldings(holdings, allTransactions, marketPrices);
+  }, [holdings, allTransactions, marketPrices]);
+
+  // Active consolidated holdings
+  const activeConsolidatedHoldings = useMemo(() => {
+    return consolidatedHoldings.filter(isHoldingActive);
+  }, [consolidatedHoldings]);
+
+  // Sort: Oldest Started Date to Newest
+  const sortedHoldings = useMemo(() => {
+    return [...activeConsolidatedHoldings].sort((a, b) => {
+      return new Date(a.startedDate).getTime() - new Date(b.startedDate).getTime();
     });
+  }, [activeConsolidatedHoldings]);
 
-    if (!earliestDate) {
-      earliestDate = '2026-01-01';
-    }
+  // Available categories
+  const availableCategories = useMemo(() => {
+    return Array.from(new Set(sortedHoldings.map(h => h.category))).sort();
+  }, [sortedHoldings]);
 
-    const age = getInvestmentAge(earliestDate);
-    const overallAmount = group.reduce((sum, h) => sum + (h.investedAmount ?? 0), 0);
-    const first = group[0];
-    const displayType = REVERSE_TYPE_MAPPING[first.category] || REVERSE_TYPE_MAPPING[first.assetType] || 'Other';
-    const categoryVal = getCategoryValue(first);
-    const category = normalizePortfolioCategory(categoryVal);
-
-    // Resolve platform names
-    const platformsSet = new Set<string>();
-    group.forEach(h => {
-      const broker = h.broker === 'Other' && h.customBroker ? h.customBroker : (h.broker || 'Other');
-      const resolved = (broker && broker.trim()) ? broker.trim() : 'Other';
-      platformsSet.add(resolved);
-    });
-    const platforms = Array.from(platformsSet).join(', ');
-
-    return {
-      key,
-      assetName: first.assetName,
-      category,
-      displayType,
-      platforms,
-      startedDate: earliestDate,
-      age,
-      overallAmount
-    };
-  });
-
-  // Sort: Oldest Started Date (earliest date) to Newest Started Date
-  consolidatedAssets.sort((a, b) => {
-    return new Date(a.startedDate).getTime() - new Date(b.startedDate).getTime();
-  });
-
-  // Dynamically resolve available categories currently present in portfolio
-  const availableCategories = Array.from(
-    new Set(consolidatedAssets.map(asset => asset.category))
-  ).sort((a, b) => a.localeCompare(b));
-  
   const categoriesList = ['All', ...availableCategories];
 
-  // Filter consolidated portfolio items based on active category filter selection
-  const filteredAssets = selectedCategory === 'All'
-    ? consolidatedAssets
-    : consolidatedAssets.filter(asset => asset.category === selectedCategory);
-  
-  // Calculate summary values using the AUTHORITATIVE engine (same as Dashboard)
-  // Raw investments + raw transactions are the single source of truth
-  const realInvestments = investments.filter(inv => !isDemoInvestment(inv));
-  const realTransactions = allTransactions.filter(tx => !tx.isDemo);
+  // Filtered by selected category
+  const filteredHoldings = useMemo(() => {
+    return selectedCategory === 'All'
+      ? sortedHoldings
+      : sortedHoldings.filter(h => h.category === selectedCategory);
+  }, [selectedCategory, sortedHoldings]);
 
-  const totalInvested = calculateTotalInvested(realInvestments, realTransactions);
-  const holdingsCount = activeHoldings.length;
+  // Paginated Holdings (10 per page)
+  const totalItems = filteredHoldings.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
 
-  // Monthly Invested Calculation — same authoritative engine, same inputs as Dashboard
+  const paginatedHoldings = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredHoldings.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredHoldings, currentPage]);
+
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
+
+  // Paginated Transactions (10 per page)
+  const totalTxItems = selectedHolding ? selectedHolding.transactions.length : 0;
+  const txTotalPages = Math.max(1, Math.ceil(totalTxItems / TX_ITEMS_PER_PAGE));
+
+  const paginatedTransactions = useMemo(() => {
+    if (!selectedHolding) return [];
+    const start = (txCurrentPage - 1) * TX_ITEMS_PER_PAGE;
+    return selectedHolding.transactions.slice(start, start + TX_ITEMS_PER_PAGE);
+  }, [selectedHolding, txCurrentPage]);
+
+  const txStartItem = totalTxItems === 0 ? 0 : (txCurrentPage - 1) * TX_ITEMS_PER_PAGE + 1;
+  const txEndItem = Math.min(txCurrentPage * TX_ITEMS_PER_PAGE, totalTxItems);
+
+  // Calculate summary values using the AUTHORITATIVE engine
+  const filteredInvs = useMemo(() => {
+    return investments.filter(inv => {
+      const isDemo = isDemoInvestment(inv);
+      if (dataTypeFilter === 'Real' && isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !isDemo) return false;
+      if (ownerFilter !== 'All' && inv.owner !== ownerFilter) return false;
+      return true;
+    });
+  }, [investments, dataTypeFilter, ownerFilter]);
+
+  const filteredTxs = useMemo(() => {
+    return allTransactions.filter(tx => {
+      const isDemo = isDemoTransaction(tx, investments);
+      if (dataTypeFilter === 'Real' && isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !isDemo) return false;
+      const parent = investments.find(inv => inv.id === tx.investmentId);
+      if (parent && ownerFilter !== 'All' && parent.owner !== ownerFilter) return false;
+      return true;
+    });
+  }, [allTransactions, investments, dataTypeFilter, ownerFilter]);
+
+  const totalInvested = calculateTotalInvested(filteredInvs, filteredTxs);
+  const holdingsCount = activeConsolidatedHoldings.length;
+
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
-  const monthlyInvestedAmount = calculateMonthlyInvested(realTransactions, realInvestments, currentYear, currentMonthIdx);
+  const monthlyInvestedAmount = calculateMonthlyInvested(filteredTxs, filteredInvs, currentYear, currentMonthIdx);
 
-  // Find top category by allocation
+  // Top category allocation
   const categoryAllocations: Record<string, number> = {};
-  activeHoldings.forEach(h => {
-    const catVal = getCategoryValue(h);
-    const cat = normalizePortfolioCategory(catVal);
-    categoryAllocations[cat] = (categoryAllocations[cat] || 0) + (h.investedAmount ?? 0);
+  activeConsolidatedHoldings.forEach(h => {
+    categoryAllocations[h.category] = (categoryAllocations[h.category] || 0) + (h.investedAmount ?? 0);
   });
   let topCategoryName = 'N/A';
   let topCategoryPercent = 0;
@@ -288,118 +164,101 @@ export const Portfolio: React.FC = () => {
     }
   }
 
+  const handleOpenBuy = (holding: ConsolidatedHolding) => {
+    setSelectedHolding(holding);
+    setTxModalMode('BUY');
+    setIsTxModalOpen(true);
+  };
+
+  const handleOpenSell = (holding: ConsolidatedHolding) => {
+    setSelectedHolding(holding);
+    setTxModalMode('SELL');
+    setIsTxModalOpen(true);
+  };
+
+  const handleOpenTransactions = (holding: ConsolidatedHolding) => {
+    setSelectedHolding(holding);
+    setTxCurrentPage(1);
+  };
+
+  const handleEdit = (inv: Investment) => {
+    setEditingInvestment(inv);
+    setIsModalOpen(true);
+  };
+
+  const handleSplit = (inv: Investment) => {
+    setSelectedSplitInvestment(inv);
+    setIsSplitModalOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this investment? This action cannot be undone.')) {
+      deleteInvestment(id);
+      showToast('Investment deleted successfully!', 'success');
+    }
+  };
+
   return (
     <div className="space-y-6 animate-slide-in pb-8">
       {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
             <Wallet className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white m-0">💼 Consolidated Portfolio</h2>
-            <p className="text-sm text-slate-405 dark:text-slate-500 m-0 font-semibold">
-              Consolidated view of your assets, holdings, and total amount invested.
-            </p>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white m-0">💼 Portfolio Summary</h2>
+            <p className="text-sm text-slate-405 dark:text-slate-500 m-0 font-semibold">Active investments and asset breakdown.</p>
           </div>
         </div>
       </div>
 
-      {consolidatedAssets.length === 0 ? (
-        <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 rounded-2xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[350px]">
-          <span className="text-3xl mb-3">💼</span>
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">No assets found</h4>
-          <p className="text-xs text-slate-405 dark:text-slate-555 max-w-xs font-semibold">
-            Add investments to view your consolidated portfolio.
-          </p>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Invested</span>
+          <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency(totalInvested)}</div>
+          <p className="text-xs text-slate-400 font-semibold m-0">Across all active investments</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Holdings</span>
+          <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{holdingsCount}</div>
+          <p className="text-xs text-slate-400 font-semibold m-0">Consolidated assets</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Invested This Month</span>
+          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(monthlyInvestedAmount)}</div>
+          <p className="text-xs text-slate-400 font-semibold m-0">Current calendar month</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-5 shadow-sm space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top Allocation</span>
+          <div className="text-xl font-extrabold text-slate-900 dark:text-white truncate">{topCategoryName}</div>
+          <p className="text-xs text-indigo-500 font-bold m-0">{topCategoryPercent.toFixed(1)}% of total portfolio</p>
+        </div>
+      </div>
+
+      {activeConsolidatedHoldings.length === 0 ? (
+        <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-12 text-center shadow-sm">
+          <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">No active portfolio holdings</h3>
+          <p className="text-xs text-slate-400 font-semibold">Active investment holdings will appear here.</p>
         </div>
       ) : (
         <>
-          {/* Summary Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 font-semibold text-xs text-slate-700 dark:text-slate-350">
-            {/* Total Invested */}
-            <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px]">
-              <div className="flex flex-col justify-between h-full gap-y-4">
-                <span className="block text-[13px] md:text-[14px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  💰 Total Invested
-                </span>
-                <div>
-                  <span className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white block leading-tight">
-                    {formatCurrency(totalInvested)}
-                  </span>
-                  <span className="text-sm md:text-[14px] text-slate-400 dark:text-slate-500 block mt-1 font-semibold">
-                    Across active holdings
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Monthly Invested */}
-            <div className="bg-white dark:bg-[#0d0f17] border border-slate-200/80 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px]">
-              <div className="flex flex-col justify-between h-full gap-y-4">
-                <span className="block text-[13px] md:text-[14px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  📅 Monthly Invested
-                </span>
-                <div>
-                  <span className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white block leading-tight">
-                    {formatCurrency(monthlyInvestedAmount)}
-                  </span>
-                  <span className="text-sm md:text-[14px] text-slate-400 dark:text-slate-500 block mt-1 font-semibold">
-                    Invested this month
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Number of Holdings */}
-            <div className="bg-white dark:bg-[#0d0f17] border border-slate-200/80 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px]">
-              <div className="flex flex-col justify-between h-full gap-y-4">
-                <span className="block text-[13px] md:text-[14px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  💼 Holdings
-                </span>
-                <div>
-                  <span className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white block leading-tight">
-                    {holdingsCount}
-                  </span>
-                  <span className="text-sm md:text-[14px] text-slate-400 dark:text-slate-500 block mt-1 font-semibold">
-                    Consolidated assets
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Portfolio Allocation */}
-            <div className="bg-white dark:bg-[#0d0f17] border border-slate-200/80 dark:border-slate-855 rounded-2xl p-6 shadow-sm flex flex-col justify-between min-h-[140px]">
-              <div className="flex flex-col justify-between h-full gap-y-4">
-                <span className="block text-[13px] md:text-[14px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  📊 Allocation
-                </span>
-                <div>
-                  <span className="text-2xl md:text-3xl font-extrabold text-indigo-650 dark:text-indigo-400 block leading-tight truncate" title={topCategoryName}>
-                    {topCategoryName}
-                  </span>
-                  <span className="text-sm md:text-[14px] text-slate-400 dark:text-slate-500 block mt-1 font-semibold truncate">
-                    {topCategoryPercent.toFixed(1)}% Top Class
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Dynamic Category Filter Controls */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-[#0d0f17] p-4 border border-slate-202 dark:border-slate-850 rounded-2xl shadow-sm">
-            <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 mr-2 flex items-center gap-1">
-              <span className="text-xs">🔍</span> Categories:
-            </span>
-            <div className="flex flex-wrap gap-1.5">
+          {/* Category Tabs */}
+          <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-4 shadow-sm flex items-center gap-2 overflow-x-auto">
+            <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 mr-2 shrink-0">Filter Category:</span>
+            <div className="flex items-center gap-1.5 shrink-0">
               {categoriesList.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                     selectedCategory === cat
-                      ? 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800/30 text-indigo-700 dark:text-indigo-400 shadow-sm'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-405 hover:bg-indigo-50/40 dark:hover:bg-slate-800/50 hover:text-indigo-650 dark:hover:text-indigo-400'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   {cat}
@@ -408,117 +267,363 @@ export const Portfolio: React.FC = () => {
             </div>
           </div>
 
-          {/* Consolidated Portfolio Main Card */}
-          <div className="bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-855 rounded-2xl p-6 shadow-sm">
-            {filteredAssets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <span className="text-3xl mb-3">🔍</span>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">No assets in this category</h4>
-                <p className="text-xs text-slate-405 dark:text-slate-555 max-w-xs font-semibold">
-                  Try selecting another category or check your filter settings.
-                </p>
+          {/* Holdings Section */}
+          <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-855 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white m-0">Investment Holdings</h3>
+              <span className="text-xs font-bold text-slate-400">
+                {filteredHoldings.length} holding{filteredHoldings.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {filteredHoldings.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 font-semibold text-xs">
+                No holdings found for category: {selectedCategory}
               </div>
             ) : (
               <>
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto w-full">
-                  <table className="w-full border-collapse text-left text-xs font-semibold">
-                    <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-550 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
-                      <tr>
-                        <th className="px-4 py-3">Asset</th>
-                        <th className="px-4 py-3">Category</th>
-                        <th className="px-4 py-3">Type</th>
-                        <th className="px-4 py-3">App / Platform</th>
-                        <th className="px-4 py-3">Started Date</th>
-                        <th className="px-4 py-3">Age of Investment</th>
-                        <th className="px-4 py-3 text-right">Overall Amount Invested</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
-                      {filteredAssets.map(asset => (
-                        <tr
-                          key={asset.key}
-                          className="hover:bg-slate-55/50 dark:hover:bg-slate-800/15 transition-colors animate-fade-in text-slate-700 dark:text-slate-300"
-                        >
-                          <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white max-w-[200px] break-words">
-                            {asset.assetName}
-                          </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap">
-                            {asset.category}
-                          </td>
-                          <td className="px-4 py-3.5 max-w-[120px] break-words">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getAssetTypeBadgeStyle(asset.displayType)}`}>
-                              {asset.displayType}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 max-w-[185px]">
-                            {renderPlatformBadges(asset.platforms)}
-                          </td>
-                          <td className="px-4 py-3.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                            {formatDate(asset.startedDate)}
-                          </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap font-bold">
-                            {asset.age}
-                          </td>
-                          <td className="px-4 py-3.5 text-right font-extrabold text-indigo-650 dark:text-indigo-400 whitespace-nowrap">
-                            {formatCurrency(asset.overallAmount)}
-                          </td>
+                {/* Desktop Holdings Table */}
+                <div className="hidden md:block border border-slate-200 dark:border-slate-855 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left border-collapse text-xs font-semibold">
+                      <colgroup>
+                        <col style={{ width: '220px' }} />
+                        <col style={{ width: '130px' }} />
+                        <col style={{ width: '130px' }} />
+                        <col style={{ width: '140px' }} />
+                        <col style={{ width: '150px' }} />
+                        <col style={{ width: '130px' }} />
+                        <col style={{ width: '110px' }} />
+                        <col style={{ width: '100px' }} />
+                      </colgroup>
+                      <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
+                        <tr>
+                          <th className="px-4 py-3.5">Asset</th>
+                          <th className="px-3 py-3.5">Category</th>
+                          <th className="px-3 py-3.5">Type</th>
+                          <th className="px-3 py-3.5">App / Platform</th>
+                          <th className="px-4 py-3.5 text-right">Invested Amount</th>
+                          <th className="px-3 py-3.5 text-center">Started Date</th>
+                          <th className="px-3 py-3.5 text-center">Age</th>
+                          <th className="px-4 py-3.5 text-center">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
+                        {paginatedHoldings.map(holding => {
+                          const menuItems = [
+                            { icon: <PlusCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />, label: "Buy", onClick: () => handleOpenBuy(holding) },
+                            { icon: <MinusCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />, label: "Sell", onClick: () => handleOpenSell(holding) },
+                            { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Transactions", onClick: () => handleOpenTransactions(holding) },
+                            { icon: <Scissors className="h-4 w-4 text-amber-600 dark:text-amber-400" />, label: "Split", onClick: () => handleSplit(holding.primaryInvestment) },
+                            { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
+                          ];
+                          return (
+                            <tr key={holding.holdingKey} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/15 transition-colors">
+                              <td className="px-4 py-3 font-bold text-slate-900 dark:text-white max-w-[200px] truncate" title={holding.assetName}>
+                                {holding.assetName}
+                              </td>
+                              <td className="px-3 py-3 text-slate-600 dark:text-slate-400">{holding.category}</td>
+                              <td className="px-3 py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getAssetTypeBadgeStyle(holding.displayType)}`}>
+                                  {holding.displayType}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3">
+                                <PlatformBadge name={holding.broker} />
+                              </td>
+                              <td className="px-4 py-3 text-right font-extrabold text-indigo-600 dark:text-indigo-400">
+                                {formatCurrency(holding.investedAmount)}
+                              </td>
+                              <td className="px-3 py-3 text-center text-slate-600 dark:text-slate-400">{formatDate(holding.startedDate)}</td>
+                              <td className="px-3 py-3 text-center font-bold text-indigo-650 dark:text-indigo-400">{holding.age}</td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => handleOpenTransactions(holding)}
+                                    className="p-1 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all cursor-pointer"
+                                    title="View Transactions"
+                                  >
+                                    <History className="h-4 w-4" />
+                                  </button>
+                                  <InlineDisclosureMenu
+                                    title="Investment Actions"
+                                    ariaLabel={`Investment actions for ${holding.assetName}`}
+                                    menuItems={menuItems}
+                                    showDelete={true}
+                                    onDelete={() => handleDelete(holding.primaryInvestment.id)}
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                {/* Mobile Card List View */}
-                <div className="md:hidden space-y-4">
-                  {filteredAssets.map(asset => (
-                    <div
-                      key={asset.key}
-                      className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 space-y-2.5 font-semibold text-[11px]"
-                    >
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 break-words">
-                            {asset.assetName}
-                          </h4>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-105 dark:border-slate-800 text-[10px]">
-                        <div>
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Category</span>
-                          <span className="font-bold text-slate-850 dark:text-slate-200">{asset.category}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Type</span>
-                          <span className="font-bold text-slate-850 dark:text-slate-200">{asset.displayType}</span>
-                        </div>
-                        <div className="col-span-2 pt-1.5 border-t border-slate-105/50 dark:border-slate-800/50 mt-1">
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-1">App / Platform</span>
-                          <div className="block mt-0.5">
-                            {renderPlatformBadges(asset.platforms)}
+                {/* Mobile Cards View */}
+                <div className="grid grid-cols-1 gap-3 md:hidden">
+                  {paginatedHoldings.map(holding => {
+                    const menuItems = [
+                      { icon: <PlusCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />, label: "Buy", onClick: () => handleOpenBuy(holding) },
+                      { icon: <MinusCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />, label: "Sell", onClick: () => handleOpenSell(holding) },
+                      { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Transactions", onClick: () => handleOpenTransactions(holding) },
+                      { icon: <Scissors className="h-4 w-4 text-amber-600 dark:text-amber-400" />, label: "Split", onClick: () => handleSplit(holding.primaryInvestment) },
+                      { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
+                    ];
+                    return (
+                      <div
+                        key={holding.holdingKey}
+                        className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 space-y-2.5 font-semibold text-[11px]"
+                      >
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate" title={holding.assetName}>
+                              {holding.assetName}
+                            </h4>
+                            <span className="text-[10px] text-slate-400">
+                              {holding.txCount} transaction{holding.txCount !== 1 ? 's' : ''}
+                            </span>
                           </div>
                         </div>
-                        <div className="pt-1.5 border-t border-slate-105/50 dark:border-slate-800/50 mt-1">
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Started Date</span>
-                          <span className="font-bold text-slate-850 dark:text-slate-200">{formatDate(asset.startedDate)}</span>
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-105 dark:border-slate-800 text-[10px]">
+                          <div>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Category</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{holding.category}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Type</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{holding.displayType}</span>
+                          </div>
+                          <div className="col-span-2 pt-1.5 border-t border-slate-105/50 dark:border-slate-800/50 mt-1">
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-1">App / Platform</span>
+                            <div className="block mt-0.5">
+                              <PlatformBadge name={holding.broker} />
+                            </div>
+                          </div>
+                          <div className="pt-1.5 border-t border-slate-105/50 dark:border-slate-800/50 mt-1">
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Started Date</span>
+                            <span className="font-bold text-slate-850 dark:text-slate-200">{formatDate(holding.startedDate)}</span>
+                          </div>
+                          <div className="text-right pt-1.5 border-t border-slate-105/50 dark:border-slate-800/50 mt-1">
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Age</span>
+                            <span className="font-bold text-indigo-650 dark:text-indigo-400">{holding.age}</span>
+                          </div>
                         </div>
-                        <div className="text-right pt-1.5 border-t border-slate-105/50 dark:border-slate-800/50 mt-1">
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 mb-0.5">Age</span>
-                          <span className="font-bold text-indigo-650 dark:text-indigo-400">{asset.age}</span>
+                        <div className="pt-2 border-t border-slate-105 dark:border-slate-800 flex justify-between items-center text-[10px]">
+                          <button
+                            onClick={() => handleOpenTransactions(holding)}
+                            className="text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1 text-[9px] hover:underline cursor-pointer"
+                          >
+                            <History className="h-3 w-3" /> View Transactions
+                          </button>
+                          <div className="flex items-center gap-3">
+                            <span className="font-extrabold text-slate-900 dark:text-white text-xs">{formatCurrency(holding.investedAmount)}</span>
+                            <InlineDisclosureMenu
+                              title="Investment Actions"
+                              ariaLabel={`Investment actions for ${holding.assetName}`}
+                              menuItems={menuItems}
+                              showDelete={true}
+                              onDelete={() => handleDelete(holding.primaryInvestment.id)}
+                            />
+                          </div>
                         </div>
                       </div>
-                      <div className="pt-2 border-t border-slate-105 dark:border-slate-800 flex justify-between items-center text-[10px]">
-                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[8px]">Overall Invested</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-xs">{formatCurrency(asset.overallAmount)}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+
+                {/* Pagination Controls BELOW Table & Cards */}
+                {totalItems > 0 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-[#0d0f17] p-4 border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Showing <strong className="text-slate-900 dark:text-white font-extrabold">{startItem}–{endItem}</strong> of <strong className="text-slate-900 dark:text-white font-extrabold">{totalItems}</strong>
+                    </div>
+
+                    {totalPages > 1 && (
+                      <ContinuousPagination
+                        totalPages={totalPages}
+                        value={currentPage}
+                        onChange={(page) => setCurrentPage(page)}
+                      />
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Transaction Activity Log Section at the VERY END of Portfolio page */}
+          <div id="transactions-section" className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm p-6 space-y-4">
+            {!selectedHolding ? (
+              <div className="py-8 text-center text-slate-400 dark:text-slate-500 font-semibold text-xs">
+                No investment selected. Click View Transactions on any investment to view its transaction history.
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-150 dark:border-slate-855 pb-4">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white m-0 flex items-center gap-2">
+                      <History className="h-5 w-5 text-indigo-500" />
+                      <span>Transaction Activity Log</span>
+                      <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                        — {selectedHolding.assetName}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 m-0 mt-1 font-semibold">
+                      {`${selectedHolding.displayType} · ${selectedHolding.broker} (${selectedHolding.txCount} transaction${selectedHolding.txCount !== 1 ? 's' : ''})`}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenBuy(selectedHolding)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all cursor-pointer shadow-sm"
+                    >
+                      + BUY
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSell(selectedHolding)}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-all cursor-pointer shadow-sm"
+                    >
+                      SELL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHolding(null)}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white font-bold text-xs transition-all cursor-pointer"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                </div>
+
+                {selectedHolding.transactions.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-slate-555 font-semibold text-xs">
+                    No transactions recorded for {selectedHolding.assetName}.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 dark:border-slate-855 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <colgroup>
+                          <col style={{ width: '130px' }} />
+                          <col style={{ width: '100px' }} />
+                          <col style={{ width: '140px' }} />
+                          <col style={{ width: '140px' }} />
+                          <col style={{ width: '150px' }} />
+                          <col style={{ width: '110px' }} />
+                          <col style={{ width: '90px' }} />
+                        </colgroup>
+                        <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[9px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
+                          <tr>
+                            <th className="px-4 py-3">Date</th>
+                            <th className="px-3 py-3">Type</th>
+                            <th className="px-3 py-3 text-right">Quantity / Units</th>
+                            <th className="px-3 py-3 text-right">Price / NAV</th>
+                            <th className="px-4 py-3 text-right">Amount</th>
+                            <th className="px-3 py-3 text-right">Charges</th>
+                            <th className="px-4 py-3 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
+                          {paginatedTransactions.map((tx) => (
+                            <tr key={tx.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                              <td className="px-4 py-3 font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{tx.date || '—'}</td>
+                              <td className="px-3 py-3 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded font-extrabold text-[9px] ${
+                                  tx.type === 'BUY'
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                    : tx.type === 'SELL'
+                                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                }`}>
+                                  {tx.type}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-right font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                                {tx.quantity?.toLocaleString(undefined, { maximumFractionDigits: 4 }) || 0}
+                              </td>
+                              <td className="px-3 py-3 text-right font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                {formatCurrency(tx.price || 0)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-extrabold whitespace-nowrap">
+                                <span className={tx.type === 'BUY' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'}>
+                                  {formatCurrency(tx.amount || (tx.quantity * tx.price))}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-right text-slate-500 dark:text-slate-400 whitespace-nowrap font-semibold">
+                                {tx.charges ? formatCurrency(tx.charges) : '₹0'}
+                              </td>
+                              <td className="px-4 py-3 text-center whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (window.confirm('Are you sure you want to delete this transaction record?')) {
+                                      deleteTransaction(tx.id);
+                                      showToast('Transaction deleted successfully.', 'info');
+                                    }
+                                  }}
+                                  className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
+                                  title="Delete Transaction"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Transaction Activity Log Pagination Bar */}
+                    {totalTxItems > 0 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/40 p-4 border-t border-slate-150 dark:border-slate-855">
+                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          Showing <strong className="text-slate-900 dark:text-white font-extrabold">{txStartItem}–{txEndItem}</strong> of <strong className="text-slate-900 dark:text-white font-extrabold">{totalTxItems}</strong>
+                        </div>
+
+                        {txTotalPages > 1 && (
+                          <ContinuousPagination
+                            totalPages={txTotalPages}
+                            value={txCurrentPage}
+                            onChange={(page) => setTxCurrentPage(page)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
         </>
       )}
+
+      {/* Edit/Add Investment Modal */}
+      <InvestmentModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        investmentToEdit={editingInvestment}
+      />
+
+      {/* Split Modal */}
+      <SplitModal
+        isOpen={isSplitModalOpen}
+        onClose={() => setIsSplitModalOpen(false)}
+        investment={selectedSplitInvestment}
+      />
+
+      {/* BUY / SELL Transaction Modal */}
+      <TransactionModal
+        isOpen={isTxModalOpen}
+        onClose={() => setIsTxModalOpen(false)}
+        holding={selectedHolding}
+        initialMode={txModalMode}
+      />
     </div>
   );
 };

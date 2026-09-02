@@ -1,11 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Moon, Sun, ShieldAlert, Download, Upload, Trash2, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Download, Upload, Trash2, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
+import { SwitchMode } from '../components/ui/switch-mode';
 
 export const Settings: React.FC = () => {
   const {
-    theme,
-    toggleTheme,
     currency,
     setCurrency,
     monthlyTarget,
@@ -16,6 +15,8 @@ export const Settings: React.FC = () => {
     lastSyncedAt,
     migrateLocalData,
     isSyncing,
+    userProfile,
+    openEditProfile,
   } = useApp();
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -83,6 +84,42 @@ export const Settings: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6">
 
+        {/* Investor Profile Card */}
+        <section className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-0 mb-4 pb-2 border-b border-slate-100 dark:border-slate-850 uppercase tracking-wider text-[11px] text-slate-400 dark:text-slate-500">
+            Investor Profile
+          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <img
+                src={userProfile.avatarUrl}
+                alt="Profile Avatar"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop';
+                }}
+                className="h-14 w-14 rounded-full object-cover shadow-sm ring-2 ring-indigo-500/20"
+              />
+              <div>
+                <h4 className="font-extrabold text-base text-slate-900 dark:text-white m-0">
+                  {userProfile.fullName}
+                </h4>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 m-0 mt-0.5">
+                  {userProfile.email}
+                </p>
+                <span className="inline-block mt-1 text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/40">
+                  {userProfile.investorTier || 'Free Tier'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={openEditProfile}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all cursor-pointer shadow-sm active:scale-95"
+            >
+              <span>Edit Profile</span>
+            </button>
+          </div>
+        </section>
+
         {/* Appearance Configuration */}
         <section className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-850 rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mt-0 mb-4 pb-2 border-b border-slate-100 dark:border-slate-850 uppercase tracking-wider text-[11px] text-slate-400 dark:text-slate-500">
@@ -97,22 +134,7 @@ export const Settings: React.FC = () => {
                 Toggle between Light mode and Dark mode layouts.
               </p>
             </div>
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold text-xs transition-all"
-            >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="h-4 w-4 text-amber-500" />
-                  <span>Light Theme</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="h-4 w-4 text-indigo-500" />
-                  <span>Dark Theme</span>
-                </>
-              )}
-            </button>
+            <SwitchMode width={64} height={32} />
           </div>
         </section>
 

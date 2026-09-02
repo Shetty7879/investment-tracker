@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
-import { isCommodityCategory, calculateTotalInvested, getEffectiveTransactionCost } from '../services/portfolioCalculationService';
+import {
+  isCommodityCategory,
+  calculateTotalInvested,
+  calculateMonthlyInvested,
+  getEffectiveTransactions,
+  getEffectiveTransactionCost,
+  isDemoInvestment,
+  isDemoTransaction
+} from '../services/portfolioCalculationService';
 import {
   ResponsiveContainer,
   PieChart,
@@ -23,48 +31,54 @@ import {
 
 type DateFilterType = 'this-month' | '3-months' | '6-months' | '1-year' | 'all-time' | 'custom';
 
+const monthNamesShort = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+/**
+ * Safely parses YYYY-MM-DD or ISO date strings without timezone shifts.
+ */
+const parseLocalDate = (dateStr: string) => {
+  if (!dateStr) return { year: 2026, monthIdx: 0, day: 1, sortKey: '2026-01-01', monthKey: '2026-01' };
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length >= 3) {
+    const year = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const sortKey = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const monthKey = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
+    return { year, monthIdx, day, sortKey, monthKey };
+  }
+  const d = new Date(dateStr);
+  const year = d.getFullYear();
+  const monthIdx = d.getMonth();
+  const day = d.getDate();
+  const sortKey = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const monthKey = `${year}-${String(monthIdx + 1).padStart(2, '0')}`;
+  return { year, monthIdx, day, sortKey, monthKey };
+};
+
 const normalizeAssetClass = (category: string | undefined): string => {
   if (!category) return 'Others';
   const clean = category.trim().toLowerCase();
   
-  if (clean === 'stock' || clean === 'stocks') {
-    return 'Stocks';
-  }
-  if (clean === 'etf' || clean === 'etfs') {
-    return 'ETFs';
-  }
-  if (clean === 'mutual fund' || clean === 'mutual funds') {
-    return 'Mutual Funds';
-  }
-  if (clean === 'fixed deposit' || clean === 'fixed deposits') {
-    return 'Fixed Deposits';
-  }
-  if (clean === 'gold' || clean === 'digital gold') {
-    return 'Gold';
-  }
-  if (clean === 'silver' || clean === 'digital silver') {
-    return 'Silver';
-  }
-  if (clean === 'platinum' || clean === 'digital platinum') {
-    return 'Platinum';
-  }
-  if (clean === 'savings/cash' || clean === 'savings' || clean === 'cash') {
-    return 'Savings/Cash';
-  }
-  if (clean === 'ipo' || clean === 'ipos') {
-    return 'IPOs';
-  }
-  if (clean === 'crypto' || clean === 'cryptocurrency') {
-    return 'Crypto';
-  }
-  if (clean === 'bond' || clean === 'bonds') {
-    return 'Bonds';
-  }
+  if (clean === 'stock' || clean === 'stocks') return 'Stocks';
+  if (clean === 'etf' || clean === 'etfs') return 'ETFs';
+  if (clean === 'mutual fund' || clean === 'mutual funds') return 'Mutual Funds';
+  if (clean === 'fixed deposit' || clean === 'fixed deposits') return 'Fixed Deposits';
+  if (clean === 'gold' || clean === 'digital gold') return 'Gold';
+  if (clean === 'silver' || clean === 'digital silver') return 'Silver';
+  if (clean === 'platinum' || clean === 'digital platinum') return 'Platinum';
+  if (clean === 'savings/cash' || clean === 'savings' || clean === 'cash') return 'Savings/Cash';
+  if (clean === 'ipo' || clean === 'ipos') return 'IPOs';
+  if (clean === 'crypto' || clean === 'cryptocurrency') return 'Crypto';
+  if (clean === 'bond' || clean === 'bonds') return 'Bonds';
   return 'Others';
 };
 
 export const Reports: React.FC = () => {
-  const { formatCurrency, investments, transactions: allTransactions } = useApp();
+  const { formatCurrency, investments, transactions: allTransactions, dataTypeFilter, ownerFilter } = useApp();
 
   // Filter States
   const [dateFilter, setDateFilter] = useState<DateFilterType>('all-time');
@@ -78,12 +92,35 @@ export const Reports: React.FC = () => {
     dateFilter === 'custom' ? customEnd : undefined
   );
 
-  const {
-    totalCurrent
-  } = portfolioTotal;
+  const { totalCurrent } = portfolioTotal;
 
-  // Lifetime invested is independent of date filter
-  const totalInvested = calculateTotalInvested(investments, allTransactions);
+  // Filter raw investments by data type and owner filter
+  const filteredInvs = useMemo(() => {
+    return investments.filter(inv => {
+      const isDemo = isDemoInvestment(inv);
+      if (dataTypeFilter === 'Real' && isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !isDemo) return false;
+      if (ownerFilter !== 'All' && inv.owner !== ownerFilter) return false;
+      return true;
+    });
+  }, [investments, dataTypeFilter, ownerFilter]);
+
+  // Filter raw transactions by data type and owner filter
+  const filteredTxs = useMemo(() => {
+    return allTransactions.filter(tx => {
+      const isDemo = isDemoTransaction(tx, investments);
+      if (dataTypeFilter === 'Real' && isDemo) return false;
+      if (dataTypeFilter === 'Demo' && !isDemo) return false;
+      const parent = investments.find(inv => inv.id === tx.investmentId);
+      if (parent && ownerFilter !== 'All' && parent.owner !== ownerFilter) return false;
+      return true;
+    });
+  }, [allTransactions, investments, dataTypeFilter, ownerFilter]);
+
+  // Central total invested calculation — 100% single source of truth
+  const totalInvested = useMemo(() => {
+    return calculateTotalInvested(filteredInvs, filteredTxs);
+  }, [filteredInvs, filteredTxs]);
 
   const formatYAxis = (value: number) => {
     if (value >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
@@ -91,8 +128,6 @@ export const Reports: React.FC = () => {
     if (value >= 1000) return `₹${(value / 1000).toFixed(0)}k`;
     return `₹${value}`;
   };
-
-
 
   // Chart 1: Donut Asset Allocation (current value weights)
   const allocationMap: Record<string, number> = {};
@@ -140,96 +175,136 @@ export const Reports: React.FC = () => {
   };
   const DEFAULT_COLOR = '#838896';
 
-  // Chart 2: Monthly Investments history (past months contributions)
-  const monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
+  // Chart 2: Monthly Investments history (Monthly Savings Growth)
+  // Rebuilt using the central calculation service for 100% reconciliation
+  const barChartData = useMemo(() => {
+    const monthKeysSet = new Set<string>();
 
-  // Group BUY transactions by month/year chronologically
-  const monthlySumMap: Record<string, { label: string; amount: number; sortKey: string }> = {};
-  transactions.forEach(tx => {
-    if (tx.type !== 'BUY') return;
-    const pDate = new Date(tx.date);
-    if (isNaN(pDate.getTime())) return;
+    filteredInvs.forEach(inv => {
+      const parentTxs = filteredTxs.filter(t => t.investmentId === inv.id);
+      const effTxs = getEffectiveTransactions(inv, parentTxs);
+      effTxs.forEach(tx => {
+        const txDate = tx.date || inv.buyDate || inv.purchaseDate || '2026-01-01';
+        const { monthKey } = parseLocalDate(txDate);
+        monthKeysSet.add(monthKey);
+      });
+    });
 
-    // Refund safety
-    const parent = holdings.find(h => h.id === tx.investmentId);
-    if (parent && parent.category === 'IPOs') {
-      const status = parent.ipoAllotmentStatus || 'Applied';
-      const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
-      if (!isAllotted) return;
-    }
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    monthKeysSet.add(currentMonthKey);
 
-    const txCost = parent ? getEffectiveTransactionCost(tx, parent) : (tx.amount ?? (tx.quantity * tx.price));
+    const sortedMonthKeys = Array.from(monthKeysSet).sort();
 
-    const mLabel = `${monthNames[pDate.getMonth()]} ${pDate.getFullYear().toString().slice(-2)}`;
-    const sortKey = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}`;
+    return sortedMonthKeys.map(mKey => {
+      const [yStr, mStr] = mKey.split('-');
+      const year = parseInt(yStr, 10);
+      const monthIdx = parseInt(mStr, 10) - 1;
 
-    if (!monthlySumMap[sortKey]) {
-      monthlySumMap[sortKey] = { label: mLabel, amount: 0, sortKey };
-    }
-    monthlySumMap[sortKey].amount += (txCost + tx.charges);
-  });
-
-  const barChartData = Object.values(monthlySumMap)
-    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-    .map(item => ({
-      name: item.label,
-      amount: Math.round(item.amount * 100) / 100
-    }));
-
-
-
-  // Chart 4: Cumulative value over time
-  // Sort transactions chronologically
-  const sortedTxs = [...transactions]
-    .filter(tx => !isNaN(new Date(tx.date).getTime()))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  // Group and compute cumulative values
-  const dateTotalsMap: Record<string, { investedDelta: number; currentDelta: number }> = {};
-  sortedTxs.forEach(tx => {
-    const dateKey = tx.date;
-    if (!dateTotalsMap[dateKey]) {
-      dateTotalsMap[dateKey] = { investedDelta: 0, currentDelta: 0 };
-    }
-    const parent = holdings.find(h => h.id === tx.investmentId);
-    if (parent && parent.category === 'IPOs') {
-      const status = parent.ipoAllotmentStatus || 'Applied';
-      const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
-      if (!isAllotted) return;
-    }
-
-    const txCost = parent ? getEffectiveTransactionCost(tx, parent) : (tx.amount ?? (tx.quantity * tx.price));
-
-    if (tx.type === 'BUY') {
-      const cost = txCost + tx.charges;
-      dateTotalsMap[dateKey].investedDelta += cost;
-      dateTotalsMap[dateKey].currentDelta += cost;
-    } else if (tx.type === 'SELL') {
-      const soldCost = tx.quantity * (parent?.buyPrice || tx.price);
-      dateTotalsMap[dateKey].investedDelta -= soldCost;
-      dateTotalsMap[dateKey].currentDelta -= txCost;
-    }
-  });
-
-  let runningInvested = 0;
-  let runningCurrent = 0;
-  const lineChartData = Object.entries(dateTotalsMap)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, values]) => {
-      runningInvested += values.investedDelta;
-      runningCurrent += values.currentDelta;
-      const currentVal = Math.max(0, runningCurrent);
-      const investedVal = Math.max(0, runningInvested);
+      // Single source of truth calculation for monthly invested capital
+      const amount = calculateMonthlyInvested(filteredTxs, filteredInvs, year, monthIdx);
+      const label = `${monthNamesShort[monthIdx]} ${yStr.slice(-2)}`;
 
       return {
-        date,
-        Invested: Math.round(investedVal * 100) / 100,
-        Current: Math.round(currentVal * 100) / 100
+        name: label,
+        amount: Math.round(amount * 100) / 100,
+        sortKey: mKey
+      };
+    }).filter(item => item.amount > 0 || item.sortKey === currentMonthKey);
+  }, [filteredInvs, filteredTxs]);
+
+  // Chart 4: Cumulative portfolio growth curve
+  // Rebuilt from actual transactions to reconcile 100% with Total Invested & Total Valuation
+  const lineChartData = useMemo(() => {
+    const dateMap: Record<string, { investedDelta: number }> = {};
+
+    filteredInvs.forEach(inv => {
+      const category = inv.category || inv.assetType || 'Stocks';
+      if (category === 'IPOs') {
+        const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
+        const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
+        if (!isAllotted) return;
+      }
+
+      const parentTxs = filteredTxs.filter(t => t.investmentId === inv.id);
+      const effTxs = getEffectiveTransactions(inv, parentTxs);
+
+      effTxs.forEach(tx => {
+        const txDate = tx.date || inv.buyDate || inv.purchaseDate || '2026-01-01';
+        const { sortKey } = parseLocalDate(txDate);
+
+        if (!dateMap[sortKey]) {
+          dateMap[sortKey] = { investedDelta: 0 };
+        }
+
+        if (tx.type === 'BUY') {
+          let cost = 0;
+          if (isCommodityCategory(category)) {
+            if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+              const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+              if (!isNaN(parsed) && isFinite(parsed)) cost = parsed;
+            } else {
+              cost = tx.price ?? 0;
+            }
+          } else {
+            cost = getEffectiveTransactionCost(tx, inv);
+          }
+          dateMap[sortKey].investedDelta += cost;
+        } else if (tx.type === 'SELL') {
+          const soldCost = tx.quantity * (inv.buyPrice ?? tx.price ?? 0);
+          dateMap[sortKey].investedDelta -= soldCost;
+        }
+      });
+    });
+
+    const sortedDates = Object.keys(dateMap).sort();
+    if (sortedDates.length === 0) return [];
+
+    const finalTotalInvested = calculateTotalInvested(filteredInvs, filteredTxs);
+    const finalTotalCurrent = totalCurrent;
+
+    let runningInvested = 0;
+
+    return sortedDates.map(dKey => {
+      const deltas = dateMap[dKey];
+      runningInvested += deltas.investedDelta;
+
+      const roundedInvested = Math.round(Math.max(0, runningInvested) * 100) / 100;
+      // Current valuation curve reflects market ratio against invested capital
+      const ratio = finalTotalInvested > 0 ? (roundedInvested / finalTotalInvested) : 1;
+      const roundedCurrent = Math.round(finalTotalCurrent * ratio * 100) / 100;
+
+      const { year, monthIdx, day } = parseLocalDate(dKey);
+      const displayLabel = `${monthNamesShort[monthIdx]} ${day}, ${year}`;
+
+      return {
+        date: displayLabel,
+        rawDate: dKey,
+        Invested: roundedInvested,
+        Current: roundedCurrent
       };
     });
+  }, [filteredInvs, filteredTxs, totalCurrent]);
+
+  // Development-time reconciliation assertion check
+  if (import.meta.env?.DEV) {
+    const finalInvestedOnChart = lineChartData.length > 0 ? lineChartData[lineChartData.length - 1].Invested : 0;
+    if (lineChartData.length > 0 && Math.abs(totalInvested - finalInvestedOnChart) > 1) {
+      console.warn(
+        `[Reconciliation Assertion Failed] Total Invested (${totalInvested}) != Final Growth Curve Value (${finalInvestedOnChart})`
+      );
+    }
+
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthlyFromCentral = calculateMonthlyInvested(filteredTxs, filteredInvs, now.getFullYear(), now.getMonth());
+    const monthlyFromChart = barChartData.find(b => b.sortKey === currentMonthKey)?.amount ?? 0;
+    if (Math.abs(monthlyFromCentral - monthlyFromChart) > 1) {
+      console.warn(
+        `[Reconciliation Assertion Failed] Monthly Invested (${monthlyFromCentral}) != Chart Current Month (${monthlyFromChart})`
+      );
+    }
+  }
 
   // Custom tooltips
   const CustomPieTooltip = ({ active, payload }: any) => {
@@ -260,8 +335,6 @@ export const Reports: React.FC = () => {
     }
     return null;
   };
-
-
 
   const CustomLineTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -455,7 +528,7 @@ export const Reports: React.FC = () => {
                 <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2230" opacity={0.1} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatYAxis} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatYAxis} domain={[0, 'auto']} />
                   <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }} />
                   <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
                 </BarChart>
@@ -482,7 +555,7 @@ export const Reports: React.FC = () => {
                 <LineChart data={lineChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2230" opacity={0.1} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatYAxis} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatYAxis} domain={[0, 'auto']} />
                   <Tooltip content={<CustomLineTooltip />} />
                   <Line type="monotone" dataKey="Invested" stroke="#64748b" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="Current" stroke="#6366f1" strokeWidth={2} dot={false} />
@@ -495,7 +568,7 @@ export const Reports: React.FC = () => {
 
       {/* Transaction Activity Summary Table */}
       <div className="bg-white dark:bg-[#0d0f17] border border-slate-250 dark:border-slate-850 rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 dark:border-slate-850">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-855">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white m-0">Transaction Activity Log</h3>
           <p className="text-xs text-slate-400 dark:text-slate-550 mt-0.5 m-0 font-semibold">
             Chronological breakdown of asset purchases, sales, and transaction charges.
@@ -561,7 +634,7 @@ export const Reports: React.FC = () => {
                         <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                           {tx.type === 'SPLIT' ? '—' : formatCurrency(tx.charges || 0)}
                         </td>
-                        <td className="px-6 py-3 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap font-extrabold">
+                        <td className="px-6 py-3 text-right font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                           {tx.type === 'SPLIT'
                             ? '—'
                             : formatCurrency(parent
@@ -582,3 +655,4 @@ export const Reports: React.FC = () => {
     </div>
   );
 };
+
