@@ -4,6 +4,8 @@ import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import type { Investment } from '../types';
 import { X, ArrowRight, Info } from 'lucide-react';
+import { Stepper } from './stepper';
+import { DatePickerField } from './calendar-9';
 
 interface SplitModalProps {
   isOpen: boolean;
@@ -156,29 +158,35 @@ export const SplitModal: React.FC<SplitModalProps> = ({
               Split Ratio (Old Shares : New Shares)
             </label>
             <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <input
-                  type="number"
-                  min="0.0001"
-                  step="any"
-                  value={oldRatio}
-                  onChange={(e) => setOldRatio(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-bold"
-                  placeholder="Old"
+              <div className="flex-1 flex flex-col items-center">
+                <Stepper
+                  size="sm"
+                  value={parseInt(oldRatio, 10) || 1}
+                  min={1}
+                  ariaLabelMinus="Decrease old share ratio"
+                  ariaLabelPlus="Increase old share ratio"
+                  onChange={(val) => {
+                    setOldRatio(val.toString());
+                    setErrors((prev) => ({ ...prev, oldRatio: '' }));
+                  }}
                 />
+                <span className="text-[10px] text-slate-400 font-semibold mt-1 uppercase">Old Shares</span>
                 {errors.oldRatio && <p className="text-red-500 text-[10px] mt-1">{errors.oldRatio}</p>}
               </div>
-              <span className="text-slate-450 dark:text-slate-555 font-extrabold text-lg">:</span>
-              <div className="flex-1">
-                <input
-                  type="number"
-                  min="0.0001"
-                  step="any"
-                  value={newRatio}
-                  onChange={(e) => setNewRatio(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-bold"
-                  placeholder="New"
+              <span className="text-slate-450 dark:text-slate-555 font-extrabold text-lg flex items-center h-9">:</span>
+              <div className="flex-1 flex flex-col items-center">
+                <Stepper
+                  size="sm"
+                  value={parseInt(newRatio, 10) || 2}
+                  min={1}
+                  ariaLabelMinus="Decrease new share ratio"
+                  ariaLabelPlus="Increase new share ratio"
+                  onChange={(val) => {
+                    setNewRatio(val.toString());
+                    setErrors((prev) => ({ ...prev, newRatio: '' }));
+                  }}
                 />
+                <span className="text-[10px] text-slate-400 font-semibold mt-1 uppercase">New Shares</span>
                 {errors.newRatio && <p className="text-red-500 text-[10px] mt-1">{errors.newRatio}</p>}
               </div>
             </div>
@@ -189,17 +197,13 @@ export const SplitModal: React.FC<SplitModalProps> = ({
 
           {/* Date Picker */}
           <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 tracking-wider">
-                Split / Ex-Date
-              </label>
-              <input
-                type="date"
+            <div>
+              <DatePickerField
+                label="Split / Ex-Date"
                 value={splitDate}
-                onChange={(e) => setSplitDate(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-bold"
+                onChange={setSplitDate}
+                error={errors.splitDate}
               />
-              {errors.splitDate && <p className="text-red-500 text-[10px] mt-1">{errors.splitDate}</p>}
             </div>
           </div>
 

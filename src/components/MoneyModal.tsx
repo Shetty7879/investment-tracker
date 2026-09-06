@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import type { MoneyRecord, MoneyRecordType } from '../types';
 import { X } from 'lucide-react';
+import { DatePickerField } from './calendar-9';
 
 interface MoneyModalProps {
   isOpen: boolean;
@@ -221,35 +222,24 @@ export const MoneyModal: React.FC<MoneyModalProps> = ({
 
             {/* Date */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-555 mb-2 uppercase tracking-wider">
-                📅 Date *
-              </label>
-              <input
-                type="date"
+              <DatePickerField
+                label="📅 Date"
+                required
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className={`w-full rounded-xl border ${
-                  errors.date ? 'border-red-500 focus:ring-red-500/10' : 'border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
-                } bg-transparent py-2.5 px-3.5 outline-none text-slate-955 dark:text-white transition-all`}
+                onChange={setDate}
+                error={errors.date}
               />
-              {errors.date && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.date}</p>}
             </div>
           </div>
 
           {/* Expected Return / Due Date */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-555 mb-2 uppercase tracking-wider">
-              📆 {type === 'receive' ? 'Expected Return Date' : 'Due Date'} (Optional)
-            </label>
-            <input
-              type="date"
+            <DatePickerField
+              label={`📆 ${type === 'receive' ? 'Expected Return Date' : 'Due Date'} (Optional)`}
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={`w-full rounded-xl border ${
-                errors.dueDate ? 'border-red-500 focus:ring-red-500/10' : 'border-slate-200 dark:border-slate-800 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10'
-              } bg-transparent py-2.5 px-3.5 outline-none text-slate-955 dark:text-white transition-all`}
+              onChange={setDueDate}
+              error={errors.dueDate}
             />
-            {errors.dueDate && <p className="text-red-500 text-[10px] mt-1 font-semibold">{errors.dueDate}</p>}
           </div>
 
           {/* Footer Actions */}

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useApp } from '../contexts/AppContext';
 import type { Investment, AssetType, BrokerType } from '../types';
 import { X } from 'lucide-react';
+import { Stepper } from './stepper';
+import { DatePickerField } from './calendar-9';
 
 interface InvestmentModalProps {
   isOpen: boolean;
@@ -861,15 +863,18 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                   <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
                     📦 Applied Lots *
                   </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    value={appliedLots}
-                    onChange={(e) => setAppliedLots(e.target.value)}
-                    placeholder="1"
-                    className={inputClass(errors.appliedLots)}
-                  />
+                  <div className="flex items-center">
+                    <Stepper
+                      value={parseInt(appliedLots, 10) || 1}
+                      min={1}
+                      ariaLabelMinus="Decrease applied lots"
+                      ariaLabelPlus="Increase applied lots"
+                      onChange={(val) => {
+                        setAppliedLots(val.toString());
+                        setErrors((prev) => ({ ...prev, appliedLots: '' }));
+                      }}
+                    />
+                  </div>
                   {errors.appliedLots && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.appliedLots}</p>}
                 </div>
 
@@ -932,15 +937,18 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
                       🎟️ Allotted Lots *
                     </label>
-                    <input
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={allottedLots}
-                      onChange={(e) => setAllottedLots(e.target.value)}
-                      placeholder="e.g. 1"
-                      className={inputClass(errors.allottedLots)}
-                    />
+                    <div className="flex items-center">
+                      <Stepper
+                        value={parseInt(allottedLots, 10) || 0}
+                        min={0}
+                        ariaLabelMinus="Decrease allotted lots"
+                        ariaLabelPlus="Increase allotted lots"
+                        onChange={(val) => {
+                          setAllottedLots(val.toString());
+                          setErrors((prev) => ({ ...prev, allottedLots: '' }));
+                        }}
+                      />
+                    </div>
                     {errors.allottedLots && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.allottedLots}</p>}
                   </div>
                   <div>
@@ -1250,16 +1258,12 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-405 dark:text-slate-550 mb-2 uppercase tracking-wider">
-                        Maturity Date
-                      </label>
-                      <input
-                        type="date"
+                      <DatePickerField
+                        label="Maturity Date"
                         value={fdMaturityDate}
-                        onChange={(e) => setFdMaturityDate(e.target.value)}
-                        className={inputClass(errors.fdMaturityDate)}
+                        onChange={setFdMaturityDate}
+                        error={errors.fdMaturityDate}
                       />
-                      {errors.fdMaturityDate && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.fdMaturityDate}</p>}
                     </div>
                   </div>
 
@@ -1286,16 +1290,20 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
-                        Quantity / Units *
+                        {type === 'Stock' ? 'Shares *' : type === 'ETF' ? 'Units *' : 'Quantity / Units *'}
                       </label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
-                        placeholder="0"
-                        className={inputClass(errors.quantity)}
-                      />
+                      <div className="flex items-center">
+                        <Stepper
+                          value={parseInt(quantity, 10) || 1}
+                          min={1}
+                          ariaLabelMinus={`Decrease ${type === 'Stock' ? 'shares' : 'quantity'}`}
+                          ariaLabelPlus={`Increase ${type === 'Stock' ? 'shares' : 'quantity'}`}
+                          onChange={(val) => {
+                            setQuantity(val.toString());
+                            setErrors((prev) => ({ ...prev, quantity: '' }));
+                          }}
+                        />
+                      </div>
                       {errors.quantity && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.quantity}</p>}
                     </div>
 
@@ -1337,32 +1345,21 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
           {/* ── Date fields ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 dark:text-slate-550 mb-2 uppercase tracking-wider">
-                {isIPO ? '📅 Application Date *' : type === 'Fixed Deposit' ? 'Start / Deposit Date *' : 'Buy Date *'}
-              </label>
-              <input
-                type="date"
+              <DatePickerField
+                label={isIPO ? '📅 Application Date' : type === 'Fixed Deposit' ? 'Start / Deposit Date' : 'Buy Date'}
+                required
                 value={isIPO ? applicationDate : buyDate}
-                onChange={(e) => isIPO ? setApplicationDate(e.target.value) : setBuyDate(e.target.value)}
-                className={inputClass(isIPO ? errors.applicationDate : errors.buyDate)}
+                onChange={(val) => isIPO ? setApplicationDate(val) : setBuyDate(val)}
+                error={isIPO ? errors.applicationDate : errors.buyDate}
               />
-              {(isIPO ? errors.applicationDate : errors.buyDate) && (
-                <p className="text-red-500 text-xs mt-1 font-semibold">
-                  {isIPO ? errors.applicationDate : errors.buyDate}
-                </p>
-              )}
             </div>
 
             {isIPO ? (
               <div>
-                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-wider">
-                  🗓️ Listing Date (Optional)
-                </label>
-                <input
-                  type="date"
+                <DatePickerField
+                  label="🗓️ Listing Date (Optional)"
                   value={listingDate}
-                  onChange={(e) => setListingDate(e.target.value)}
-                  className={inputClass()}
+                  onChange={setListingDate}
                 />
               </div>
             ) : (

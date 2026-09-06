@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import type { Goal } from '../types';
 import { X } from 'lucide-react';
+import { DatePickerField } from './calendar-9';
 
 interface GoalModalProps {
   isOpen: boolean;
@@ -205,12 +206,10 @@ export const GoalModal: React.FC<GoalModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-550 dark:text-slate-400 mb-1.5">Target Date (Optional)</label>
-              <input
-                type="date"
+              <DatePickerField
+                label="Target Date (Optional)"
                 value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2.5 px-3 text-sm outline-none focus:border-indigo-500 text-slate-955 dark:text-white"
+                onChange={setTargetDate}
               />
             </div>
             <div>

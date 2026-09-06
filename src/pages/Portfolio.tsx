@@ -3,7 +3,7 @@ import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
 import type { Investment } from '../types';
 import { calculateTotalInvested, calculateMonthlyInvested, isDemoInvestment, isDemoTransaction } from '../services/portfolioCalculationService';
-import { getConsolidatedHoldings, isHoldingActive } from '../utils/consolidation';
+import { getConsolidatedHoldings, isHoldingActive, isHoldingSold, getHoldingStatusBadgeInfo, formatQuantityWithUnit } from '../utils/consolidation';
 import type { ConsolidatedHolding } from '../utils/consolidation';
 import { Wallet, History, PlusCircle, MinusCircle, Scissors, Edit2, Trash2 } from 'lucide-react';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
@@ -38,6 +38,12 @@ export const Portfolio: React.FC = () => {
   const [selectedHolding, setSelectedHolding] = useState<ConsolidatedHolding | null>(null);
   const [txModalMode, setTxModalMode] = useState<'BUY' | 'SELL'>('BUY');
 
+  // Filter & Sort States
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [platformFilter, setPlatformFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('all');
+  const [sortOption, setSortOption] = useState<string>('latest-investment');
+
   // Edit and Split modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
@@ -52,10 +58,10 @@ export const Portfolio: React.FC = () => {
   const TX_ITEMS_PER_PAGE = 10;
   const [txCurrentPage, setTxCurrentPage] = useState<number>(1);
 
-  // Reset investment page to 1 whenever category filter changes
+  // Reset investment page to 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategory]);
+  }, [selectedCategory, searchQuery, platformFilter, statusFilter, sortOption]);
 
   // Reset transaction page to 1 whenever selected holding changes
   useEffect(() => {
@@ -67,40 +73,71 @@ export const Portfolio: React.FC = () => {
     return getConsolidatedHoldings(holdings, allTransactions, marketPrices);
   }, [holdings, allTransactions, marketPrices]);
 
+  // Extract unique platforms
+  const availablePlatforms = useMemo(() => {
+    const set = new Set<string>();
+    consolidatedHoldings.forEach(h => {
+      if (h.broker) set.add(h.broker);
+    });
+    return Array.from(set).sort();
+  }, [consolidatedHoldings]);
+
   // Active consolidated holdings
   const activeConsolidatedHoldings = useMemo(() => {
     return consolidatedHoldings.filter(isHoldingActive);
   }, [consolidatedHoldings]);
 
-  // Sort: Oldest Started Date to Newest
-  const sortedHoldings = useMemo(() => {
-    return [...activeConsolidatedHoldings].sort((a, b) => {
-      return new Date(a.startedDate).getTime() - new Date(b.startedDate).getTime();
-    });
-  }, [activeConsolidatedHoldings]);
-
   // Available categories
   const availableCategories = useMemo(() => {
-    return Array.from(new Set(sortedHoldings.map(h => h.category))).sort();
-  }, [sortedHoldings]);
+    return Array.from(new Set(consolidatedHoldings.map(h => h.category))).sort();
+  }, [consolidatedHoldings]);
 
   const categoriesList = ['All', ...availableCategories];
 
-  // Filtered by selected category
+  // Filtered by search, platform, status, category
   const filteredHoldings = useMemo(() => {
-    return selectedCategory === 'All'
-      ? sortedHoldings
-      : sortedHoldings.filter(h => h.category === selectedCategory);
-  }, [selectedCategory, sortedHoldings]);
+    return consolidatedHoldings.filter(h => {
+      if (statusFilter === 'active' && !isHoldingActive(h)) return false;
+      if (statusFilter === 'sold' && !isHoldingSold(h)) return false;
+      if (selectedCategory !== 'All' && h.category !== selectedCategory) return false;
+      if (platformFilter !== 'All' && h.broker !== platformFilter) return false;
+
+      const query = searchQuery.trim().toLowerCase();
+      if (query) {
+        const nameMatch = h.assetName.toLowerCase().includes(query);
+        const symbolMatch = h.symbol ? h.symbol.toLowerCase().includes(query) : false;
+        const brokerMatch = h.broker.toLowerCase().includes(query);
+        if (!nameMatch && !symbolMatch && !brokerMatch) return false;
+      }
+      return true;
+    });
+  }, [consolidatedHoldings, statusFilter, selectedCategory, platformFilter, searchQuery]);
+
+  // Sort holdings
+  const sortedHoldings = useMemo(() => {
+    return [...filteredHoldings].sort((a, b) => {
+      switch (sortOption) {
+        case 'highest-value': return (b.investedAmount ?? 0) - (a.investedAmount ?? 0);
+        case 'lowest-value': return (a.investedAmount ?? 0) - (b.investedAmount ?? 0);
+        case 'highest-quantity': return (b.currentQuantity ?? b.totalBuyQuantity ?? 0) - (a.currentQuantity ?? a.totalBuyQuantity ?? 0);
+        case 'lowest-quantity': return (a.currentQuantity ?? a.totalBuyQuantity ?? 0) - (b.currentQuantity ?? b.totalBuyQuantity ?? 0);
+        case 'alphabetical': return a.assetName.localeCompare(b.assetName);
+        case 'alphabetical-reverse': return b.assetName.localeCompare(a.assetName);
+        case 'oldest-investment': return new Date(a.startedDate || 0).getTime() - new Date(b.startedDate || 0).getTime();
+        case 'latest-investment':
+        default: return new Date(b.startedDate || 0).getTime() - new Date(a.startedDate || 0).getTime();
+      }
+    });
+  }, [filteredHoldings, sortOption]);
 
   // Paginated Holdings (10 per page)
-  const totalItems = filteredHoldings.length;
+  const totalItems = sortedHoldings.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
 
   const paginatedHoldings = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredHoldings.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredHoldings, currentPage]);
+    return sortedHoldings.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedHoldings, currentPage]);
 
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
   const endItem = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
@@ -247,9 +284,98 @@ export const Portfolio: React.FC = () => {
         </div>
       ) : (
         <>
+          {/* Search & Sorter Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#0d0f17] p-4 border border-slate-200 dark:border-slate-855 rounded-2xl shadow-sm">
+            {/* Search Input */}
+            <div className="relative w-full md:w-80 font-semibold">
+              <input
+                type="text"
+                placeholder="Search by asset name, symbol, or platform..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17] placeholder-slate-400 dark:placeholder-slate-550"
+              />
+              <span className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-555 text-xs">🔍</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Platform Filter Dropdown */}
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="text-[10px] uppercase font-bold text-slate-405 dark:text-slate-555 flex items-center gap-1">
+                  🏢 PLATFORM
+                </span>
+                <select
+                  value={platformFilter}
+                  onChange={e => setPlatformFilter(e.target.value)}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2 px-3 text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17]"
+                >
+                  <option value="All">All Platforms</option>
+                  {availablePlatforms.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status Filter (Strict order: All -> Active -> Sold) */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    statusFilter === 'all'
+                      ? 'bg-indigo-650 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setStatusFilter('active')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    statusFilter === 'active'
+                      ? 'bg-indigo-650 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Active
+                </button>
+                <button
+                  onClick={() => setStatusFilter('sold')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    statusFilter === 'sold'
+                      ? 'bg-indigo-650 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Sold
+                </button>
+              </div>
+
+              {/* Sorter */}
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="text-[10px] uppercase font-bold text-slate-405 dark:text-slate-555 flex items-center gap-1">
+                  ↕ SORT
+                </span>
+                <select
+                  value={sortOption}
+                  onChange={e => setSortOption(e.target.value)}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2 px-3 text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17]"
+                >
+                  <option value="latest-investment">Latest Transaction</option>
+                  <option value="oldest-investment">Oldest Transaction</option>
+                  <option value="highest-value">Highest Invested</option>
+                  <option value="lowest-value">Lowest Invested</option>
+                  <option value="highest-quantity">Highest Quantity</option>
+                  <option value="lowest-quantity">Lowest Quantity</option>
+                  <option value="alphabetical">Asset Name A-Z</option>
+                  <option value="alphabetical-reverse">Asset Name Z-A</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Category Tabs */}
           <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-4 shadow-sm flex items-center gap-2 overflow-x-auto">
-            <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 mr-2 shrink-0">Filter Category:</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-555 mr-2 shrink-0">Filter Category:</span>
             <div className="flex items-center gap-1.5 shrink-0">
               {categoriesList.map(cat => (
                 <button
@@ -289,12 +415,12 @@ export const Portfolio: React.FC = () => {
                       <colgroup>
                         <col style={{ width: '220px' }} />
                         <col style={{ width: '130px' }} />
-                        <col style={{ width: '130px' }} />
+                        <col style={{ width: '120px' }} />
                         <col style={{ width: '140px' }} />
                         <col style={{ width: '150px' }} />
-                        <col style={{ width: '130px' }} />
-                        <col style={{ width: '110px' }} />
+                        <col style={{ width: '150px' }} />
                         <col style={{ width: '100px' }} />
+                        <col style={{ width: '90px' }} />
                       </colgroup>
                       <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
                         <tr>
@@ -303,24 +429,36 @@ export const Portfolio: React.FC = () => {
                           <th className="px-3 py-3.5">Type</th>
                           <th className="px-3 py-3.5">App / Platform</th>
                           <th className="px-4 py-3.5 text-right">Invested Amount</th>
-                          <th className="px-3 py-3.5 text-center">Started Date</th>
+                          <th className="px-4 py-3.5 text-right">Quantity / Units</th>
                           <th className="px-3 py-3.5 text-center">Age</th>
                           <th className="px-4 py-3.5 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
                         {paginatedHoldings.map(holding => {
-                          const menuItems = [
+                          const isActive = isHoldingActive(holding);
+                          const badgeInfo = getHoldingStatusBadgeInfo(holding);
+                          const menuItems = isActive ? [
                             { icon: <PlusCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />, label: "Buy", onClick: () => handleOpenBuy(holding) },
                             { icon: <MinusCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />, label: "Sell", onClick: () => handleOpenSell(holding) },
                             { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Transactions", onClick: () => handleOpenTransactions(holding) },
                             { icon: <Scissors className="h-4 w-4 text-amber-600 dark:text-amber-400" />, label: "Split", onClick: () => handleSplit(holding.primaryInvestment) },
                             { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
+                          ] : [
+                            { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Sale Details", onClick: () => handleOpenTransactions(holding) },
+                            { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
                           ];
                           return (
                             <tr key={holding.holdingKey} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/15 transition-colors">
                               <td className="px-4 py-3 font-bold text-slate-900 dark:text-white max-w-[200px] truncate" title={holding.assetName}>
-                                {holding.assetName}
+                                <div className="flex items-center gap-1.5">
+                                  <span>{holding.assetName}</span>
+                                  {badgeInfo.isStatusVisible && (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeInfo.colorClass}`}>
+                                      {badgeInfo.label.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-3 py-3 text-slate-600 dark:text-slate-400">{holding.category}</td>
                               <td className="px-3 py-3">
@@ -334,25 +472,18 @@ export const Portfolio: React.FC = () => {
                               <td className="px-4 py-3 text-right font-extrabold text-indigo-600 dark:text-indigo-400">
                                 {formatCurrency(holding.investedAmount)}
                               </td>
-                              <td className="px-3 py-3 text-center text-slate-600 dark:text-slate-400">{formatDate(holding.startedDate)}</td>
-                              <td className="px-3 py-3 text-center font-bold text-indigo-650 dark:text-indigo-400">{holding.age}</td>
+                              <td className="px-4 py-3 text-right font-bold text-slate-850 dark:text-slate-200">
+                                {formatQuantityWithUnit(holding.currentQuantity, holding.category, holding.primaryInvestment?.weightUnit)}
+                              </td>
+                              <td className="px-3 py-3 text-center font-semibold text-slate-600 dark:text-slate-400">{holding.age}</td>
                               <td className="px-4 py-3 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    onClick={() => handleOpenTransactions(holding)}
-                                    className="p-1 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all cursor-pointer"
-                                    title="View Transactions"
-                                  >
-                                    <History className="h-4 w-4" />
-                                  </button>
-                                  <InlineDisclosureMenu
-                                    title="Investment Actions"
-                                    ariaLabel={`Investment actions for ${holding.assetName}`}
-                                    menuItems={menuItems}
-                                    showDelete={true}
-                                    onDelete={() => handleDelete(holding.primaryInvestment.id)}
-                                  />
-                                </div>
+                                <InlineDisclosureMenu
+                                  title="Investment Actions"
+                                  ariaLabel={`Investment actions for ${holding.assetName}`}
+                                  menuItems={menuItems}
+                                  showDelete={true}
+                                  onDelete={() => handleDelete(holding.primaryInvestment.id)}
+                                />
                               </td>
                             </tr>
                           );

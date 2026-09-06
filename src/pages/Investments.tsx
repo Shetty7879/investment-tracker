@@ -1,4 +1,3 @@
-// Investments.tsx — Clean, responsive, 10 items/page, bottom Transaction Activity Log
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
@@ -6,7 +5,7 @@ import type { Investment } from '../types';
 import { InvestmentModal } from '../components/InvestmentModal';
 import { SplitModal } from '../components/SplitModal';
 import { TransactionModal } from '../components/TransactionModal';
-import { getConsolidatedHoldings, isHoldingActive } from '../utils/consolidation';
+import { getConsolidatedHoldings, isHoldingActive, isHoldingSold, getHoldingStatusBadgeInfo, formatQuantityWithUnit } from '../utils/consolidation';
 import type { ConsolidatedHolding } from '../utils/consolidation';
 import {
   Briefcase,
@@ -28,9 +27,13 @@ import { ContinuousPagination } from '../components/ui/continuous-pagination';
 
 type SortOptionType =
   | 'latest-investment'
+  | 'oldest-investment'
   | 'highest-value'
   | 'lowest-value'
-  | 'alphabetical';
+  | 'highest-quantity'
+  | 'lowest-quantity'
+  | 'alphabetical'
+  | 'alphabetical-reverse';
 
 export const Investments: React.FC = () => {
   const {
@@ -59,7 +62,7 @@ export const Investments: React.FC = () => {
   // Filter & Sort States
   const [typeFilter, setTypeFilter] = useState<string>('All');
   const [platformFilter, setPlatformFilter] = useState<string>('All');
-  const [statusFilter, setStatusFilter] = useState<'active' | 'all'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('all');
   const [sortOption, setSortOption] = useState<SortOptionType>('latest-investment');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -132,14 +135,14 @@ export const Investments: React.FC = () => {
   const handleOpenTransactions = (holding: ConsolidatedHolding) => {
     setSelectedHolding(holding);
     setTxCurrentPage(1);
-    // Select investment without opening a modal or scrolling
   };
 
   // Filter consolidated holdings
   const filteredHoldings = useMemo(() => {
     return consolidatedHoldings.filter(h => {
       if (statusFilter === 'active' && !isHoldingActive(h)) return false;
-      if (typeFilter !== 'All' && h.displayType !== typeFilter) return false;
+      if (statusFilter === 'sold' && !isHoldingSold(h)) return false;
+      if (typeFilter !== 'All' && h.displayType !== typeFilter && h.category !== typeFilter) return false;
       if (platformFilter !== 'All' && h.broker !== platformFilter) return false;
 
       const query = searchQuery.trim().toLowerCase();
@@ -159,7 +162,11 @@ export const Investments: React.FC = () => {
       switch (sortOption) {
         case 'highest-value': return (b.investedAmount ?? 0) - (a.investedAmount ?? 0);
         case 'lowest-value': return (a.investedAmount ?? 0) - (b.investedAmount ?? 0);
+        case 'highest-quantity': return (b.currentQuantity ?? b.totalBuyQuantity ?? 0) - (a.currentQuantity ?? a.totalBuyQuantity ?? 0);
+        case 'lowest-quantity': return (a.currentQuantity ?? a.totalBuyQuantity ?? 0) - (b.currentQuantity ?? b.totalBuyQuantity ?? 0);
         case 'alphabetical': return a.assetName.localeCompare(b.assetName);
+        case 'alphabetical-reverse': return b.assetName.localeCompare(a.assetName);
+        case 'oldest-investment': return new Date(a.startedDate || 0).getTime() - new Date(b.startedDate || 0).getTime();
         case 'latest-investment':
         default: return new Date(b.startedDate || 0).getTime() - new Date(a.startedDate || 0).getTime();
       }
@@ -253,27 +260,37 @@ export const Investments: React.FC = () => {
                 </select>
               </div>
 
-              {/* Status Filter */}
+              {/* Status Filter (Strict order: All -> Active -> Sold) */}
               <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                    statusFilter === 'all'
+                      ? 'bg-indigo-650 text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  All
+                </button>
                 <button
                   onClick={() => setStatusFilter('active')}
                   className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
                     statusFilter === 'active'
-                      ? 'bg-indigo-600 text-white shadow-sm'
+                      ? 'bg-indigo-650 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Active
                 </button>
                 <button
-                  onClick={() => setStatusFilter('all')}
+                  onClick={() => setStatusFilter('sold')}
                   className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                    statusFilter === 'all'
-                      ? 'bg-indigo-600 text-white shadow-sm'
+                    statusFilter === 'sold'
+                      ? 'bg-indigo-650 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  All
+                  Sold
                 </button>
               </div>
 
@@ -288,9 +305,13 @@ export const Investments: React.FC = () => {
                   className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-2 px-3 text-xs font-bold outline-none focus:border-indigo-500 text-slate-950 dark:text-white dark:bg-[#0d0f17]"
                 >
                   <option value="latest-investment">Latest Transaction</option>
+                  <option value="oldest-investment">Oldest Transaction</option>
                   <option value="highest-value">Highest Invested</option>
                   <option value="lowest-value">Lowest Invested</option>
-                  <option value="alphabetical">Alphabetical</option>
+                  <option value="highest-quantity">Highest Quantity</option>
+                  <option value="lowest-quantity">Lowest Quantity</option>
+                  <option value="alphabetical">Asset Name A-Z</option>
+                  <option value="alphabetical-reverse">Asset Name Z-A</option>
                 </select>
               </div>
             </div>
@@ -336,15 +357,13 @@ export const Investments: React.FC = () => {
             <div className="overflow-x-auto w-full">
               <table className="w-full border-collapse text-left text-xs font-semibold">
                 <colgroup>
-                  <col style={{ width: '230px' }} />
-                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '220px' }} />
+                  <col style={{ width: '130px' }} />
+                  <col style={{ width: '120px' }} />
                   <col style={{ width: '140px' }} />
                   <col style={{ width: '150px' }} />
-                  <col style={{ width: '130px' }} />
-                  <col style={{ width: '130px' }} />
-                  <col style={{ width: '160px' }} />
-                  <col style={{ width: '140px' }} />
-                  <col style={{ width: '130px' }} />
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '100px' }} />
                   <col style={{ width: '90px' }} />
                 </colgroup>
                 <thead className="bg-slate-50/50 dark:bg-slate-900/40 text-slate-405 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider border-b border-slate-150 dark:border-slate-855">
@@ -353,38 +372,50 @@ export const Investments: React.FC = () => {
                     <th className="px-4 py-4">Category</th>
                     <th className="px-4 py-4">Type</th>
                     <th className="px-4 py-4">App / Platform</th>
+                    <th className="px-4 py-4 text-right">Invested Amount</th>
                     <th className="px-4 py-4 text-right">Quantity / Units</th>
-                    <th className="px-4 py-4 text-right">Avg Purchase Price</th>
-                    <th className="px-4 py-4 text-right">Total Invested</th>
-                    <th className="px-4 py-4 text-center">Started Date</th>
                     <th className="px-4 py-4 text-center">Age</th>
                     <th className="px-4 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 dark:divide-slate-850 font-medium">
                   {totalItems === 0 ? (
-                    <tr><td colSpan={10} className="px-6 py-8 text-center text-slate-450 dark:text-slate-555">No consolidated holdings match the active filters.</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-450 dark:text-slate-555">No consolidated holdings match the active filters.</td></tr>
                   ) : (
                     paginatedHoldings.map(holding => {
-                      const menuItems = [
+                      const isActive = isHoldingActive(holding);
+                      const badgeInfo = getHoldingStatusBadgeInfo(holding);
+                      const menuItems = isActive ? [
                         { icon: <PlusCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />, label: "Buy", onClick: () => handleOpenBuy(holding) },
                         { icon: <MinusCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />, label: "Sell", onClick: () => handleOpenSell(holding) },
                         { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Transactions", onClick: () => handleOpenTransactions(holding) },
                         { icon: <Scissors className="h-4 w-4 text-amber-600 dark:text-amber-400" />, label: "Split", onClick: () => handleSplit(holding.primaryInvestment) },
                         { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
+                      ] : [
+                        { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Sale Details", onClick: () => handleOpenTransactions(holding) },
+                        { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
                       ];
                       return (
                         <tr key={holding.holdingKey} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/15 transition-colors">
-                          <td className="px-4 py-3 font-bold text-slate-900 dark:text-white max-w-[200px] overflow-hidden text-ellipsis" title={holding.assetName}>{holding.assetName}</td>
-                          <td className="px-4 py-3">{holding.category}</td>
-                          <td className="px-4 py-3"><span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getAssetTypeBadgeStyle(holding.displayType)}`}>{holding.displayType}</span></td>
-                          <td className="px-4 py-3"><PlatformBadge name={holding.broker} /></td>
-                          <td className="px-4 py-3 text-right">{holding.currentQuantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-                          <td className="px-4 py-3 text-right">{formatCurrency(holding.averageBuyPrice)}</td>
-                          <td className="px-4 py-3 text-right font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency(holding.investedAmount)}</td>
-                          <td className="px-4 py-3 text-center">{holding.startedDate}</td>
-                          <td className="px-4 py-3 text-center">{holding.age}</td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-white max-w-[200px] overflow-hidden text-ellipsis" title={holding.assetName}>
+                            <div className="flex items-center gap-1.5">
+                              <span>{holding.assetName}</span>
+                              {badgeInfo.isStatusVisible && (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeInfo.colorClass}`}>
+                                  {badgeInfo.label.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400">{holding.category}</td>
+                          <td className="px-4 py-3.5"><span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getAssetTypeBadgeStyle(holding.displayType)}`}>{holding.displayType}</span></td>
+                          <td className="px-4 py-3.5"><PlatformBadge name={holding.broker} /></td>
+                          <td className="px-4 py-3.5 text-right font-extrabold text-indigo-600 dark:text-indigo-400">{formatCurrency(holding.investedAmount)}</td>
+                          <td className="px-4 py-3.5 text-right font-bold text-slate-850 dark:text-slate-200">
+                            {formatQuantityWithUnit(holding.currentQuantity, holding.category, holding.primaryInvestment?.weightUnit)}
+                          </td>
+                          <td className="px-4 py-3.5 text-center font-semibold text-slate-600 dark:text-slate-400">{holding.age}</td>
+                          <td className="px-4 py-3.5 text-center">
                             <InlineDisclosureMenu title="Investment Actions" ariaLabel={`Investment actions for ${holding.assetName}`} menuItems={menuItems} showDelete={true} onDelete={() => handleDelete(holding.primaryInvestment.id)} />
                           </td>
                         </tr>

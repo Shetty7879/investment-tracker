@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { usePortfolio } from '../hooks/usePortfolio';
+import { DatePickerField } from '../components/calendar-9';
 import {
   isCommodityCategory,
   calculateTotalInvested,
@@ -405,23 +406,19 @@ export const Reports: React.FC = () => {
 
       {/* Custom Date Inputs Picker */}
       {dateFilter === 'custom' && (
-        <div className="grid grid-cols-2 gap-4 bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 p-4 rounded-2xl max-w-md animate-slide-in">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white dark:bg-[#0d0f17] border border-slate-202 dark:border-slate-850 p-4 rounded-2xl max-w-md animate-slide-in">
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mb-1">Start Date</label>
-            <input
-              type="date"
+            <DatePickerField
+              label="Start Date"
               value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="block w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-1.5 px-3 text-xs outline-none focus:border-indigo-500 text-slate-900 dark:text-white"
+              onChange={setCustomStart}
             />
           </div>
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase mb-1">End Date</label>
-            <input
-              type="date"
+            <DatePickerField
+              label="End Date"
               value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="block w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent py-1.5 px-3 text-xs outline-none focus:border-indigo-500 text-slate-900 dark:text-white"
+              onChange={setCustomEnd}
             />
           </div>
         </div>

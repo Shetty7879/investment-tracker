@@ -4,6 +4,8 @@ import { useApp } from '../contexts/AppContext';
 import type { ConsolidatedHolding } from '../utils/consolidation';
 import { X, Plus, AlertCircle } from 'lucide-react';
 import type { Transaction } from '../types';
+import { Stepper } from './stepper';
+import { DatePickerField } from './calendar-9';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -198,15 +200,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             {/* Date */}
             <div>
-              <label className="block text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">
-                Date <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="date"
+              <DatePickerField
+                label={mode === 'SELL' ? 'Sell Date' : 'Buy Date'}
                 required
                 value={date}
-                onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17]"
+                onChange={setDate}
               />
             </div>
 
@@ -215,16 +213,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <label className="block text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">
                 {quantityLabel} <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="number"
-                step="any"
-                min="0.000001"
-                required
-                placeholder="0.00"
-                value={quantity}
-                onChange={e => handleQuantityChange(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17]"
-              />
+              <div className="flex items-center">
+                <Stepper
+                  size="sm"
+                  value={parseInt(quantity, 10) || 1}
+                  min={1}
+                  max={mode === 'SELL' ? Math.max(1, Math.floor(availableQty)) : 999999}
+                  ariaLabelMinus={`Decrease ${quantityLabel.toLowerCase()}`}
+                  ariaLabelPlus={`Increase ${quantityLabel.toLowerCase()}`}
+                  onChange={(val) => handleQuantityChange(val.toString())}
+                />
+              </div>
             </div>
           </div>
 

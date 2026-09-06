@@ -50,6 +50,27 @@ const REVERSE_TYPE_MAPPING: Record<string, string> = {
   'Other': 'Other'
 };
 
+export const formatQuantityWithUnit = (quantity: number = 0, category?: string, weightUnit?: string): string => {
+  const cat = normalizeCategory(category);
+  const qty = quantity || 0;
+  const qtyStr = qty % 1 === 0 ? qty.toString() : qty.toFixed(2);
+  
+  if (cat === 'Stocks') {
+    return `${qtyStr} ${qty === 1 ? 'Share' : 'Shares'}`;
+  }
+  if (cat === 'ETFs' || cat === 'Mutual Funds') {
+    return `${qtyStr} ${qty === 1 ? 'Unit' : 'Units'}`;
+  }
+  if (cat === 'Digital Gold' || cat === 'Digital Silver' || cat === 'Digital Platinum') {
+    const unit = weightUnit || 'g';
+    return `${qtyStr} ${unit}`;
+  }
+  if (cat === 'IPOs') {
+    return `${qtyStr} ${qty === 1 ? 'Share' : 'Shares'}`;
+  }
+  return `${qtyStr} ${qty === 1 ? 'Unit' : 'Units'}`;
+};
+
 export const normalizeCategory = (cat?: string): string => {
   if (!cat) return 'Other';
   const clean = cat.trim();
@@ -89,24 +110,28 @@ export const getHoldingGroupKey = (inv: {
 };
 
 /**
- * Helper to determine if a consolidated holding or metric is active.
+ * Helper to determine if a consolidated holding or investment is currently active (user owns the asset).
+ * For IPOs: ONLY 'Allotted' or 'Shares Received' with quantity > 0 is considered Active.
+ * Applied / Pending Allotment, Not Allotted, Refunded, Withdrawn, Cancelled are NOT Active.
  */
 export const isHoldingActive = (h: {
-  category: string;
+  category?: string;
+  assetType?: string;
   quantity?: number;
   currentQuantity?: number;
   investedAmount?: number;
   currentValue?: number | null;
   ipoAllotmentStatus?: string;
   allotmentStatus?: string;
+  primaryInvestment?: any;
 }): boolean => {
-  const category = h.category || '';
+  const category = normalizeCategory(h.category || h.assetType || (h.primaryInvestment?.category || h.primaryInvestment?.assetType));
   const qty = h.currentQuantity ?? h.quantity ?? 0;
   
   if (category === 'IPOs') {
-    const status = h.ipoAllotmentStatus || h.allotmentStatus || 'Applied';
-    const inactiveStatuses = ['Not Allotted', 'Refund Pending', 'Refunded', 'Withdrawn', 'Sold'];
-    return !inactiveStatuses.includes(status);
+    const rawStatus = (h.ipoAllotmentStatus || h.allotmentStatus || h.primaryInvestment?.ipoAllotmentStatus || h.primaryInvestment?.allotmentStatus || 'Applied').trim().toLowerCase();
+    const isAllotted = rawStatus === 'allotted' || rawStatus === 'shares received';
+    return isAllotted && qty > 0;
   }
   
   if (isCommodityCategory(category)) {
@@ -117,6 +142,124 @@ export const isHoldingActive = (h: {
   }
   
   return qty > 0;
+};
+
+/**
+ * Helper to determine if a holding or investment has been completely sold.
+ * For IPOs: Status === 'Sold' (or 'Allotted' with quantity 0).
+ * Pending, Not Allotted, Withdrawn, Cancelled IPOs are NOT Sold.
+ */
+export const isHoldingSold = (h: {
+  category?: string;
+  assetType?: string;
+  quantity?: number;
+  currentQuantity?: number;
+  investedAmount?: number;
+  ipoAllotmentStatus?: string;
+  allotmentStatus?: string;
+  primaryInvestment?: any;
+}): boolean => {
+  const category = normalizeCategory(h.category || h.assetType || (h.primaryInvestment?.category || h.primaryInvestment?.assetType));
+  const qty = h.currentQuantity ?? h.quantity ?? 0;
+  
+  if (category === 'IPOs') {
+    const rawStatus = (h.ipoAllotmentStatus || h.allotmentStatus || h.primaryInvestment?.ipoAllotmentStatus || h.primaryInvestment?.allotmentStatus || '').trim().toLowerCase();
+    if (rawStatus === 'sold') return true;
+    if ((rawStatus === 'allotted' || rawStatus === 'shares received') && qty === 0) return true;
+    return false;
+  }
+  
+  return qty === 0;
+};
+
+export interface HoldingStatusBadgeInfo {
+  label: string;
+  colorClass: string;
+  isStatusVisible: boolean;
+}
+
+/**
+ * Returns badge info for rendering status tags (Applied, Allotted, Not Allotted, Sold, Withdrawn).
+ */
+export const getHoldingStatusBadgeInfo = (h: {
+  category?: string;
+  assetType?: string;
+  quantity?: number;
+  currentQuantity?: number;
+  investedAmount?: number;
+  ipoAllotmentStatus?: string;
+  allotmentStatus?: string;
+  primaryInvestment?: any;
+}): HoldingStatusBadgeInfo => {
+  const category = normalizeCategory(h.category || h.assetType || (h.primaryInvestment?.category || h.primaryInvestment?.assetType));
+  const isSold = isHoldingSold(h);
+  
+  if (category === 'IPOs') {
+    const rawStatus = (h.ipoAllotmentStatus || h.allotmentStatus || h.primaryInvestment?.ipoAllotmentStatus || h.primaryInvestment?.allotmentStatus || 'Applied').trim();
+    const lower = rawStatus.toLowerCase();
+    
+    if (lower === 'applied' || lower === 'pending allotment' || lower === 'pending') {
+      return {
+        label: 'Applied',
+        colorClass: 'bg-amber-500/10 text-amber-500 border-amber-500/25',
+        isStatusVisible: true
+      };
+    }
+    if (lower === 'allotted' || lower === 'shares received') {
+      if (isSold) {
+        return {
+          label: 'Sold',
+          colorClass: 'bg-rose-500/10 text-rose-500 border-rose-500/25',
+          isStatusVisible: true
+        };
+      }
+      return {
+        label: 'Allotted',
+        colorClass: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25',
+        isStatusVisible: true
+      };
+    }
+    if (lower === 'not allotted' || lower === 'rejected' || lower === 'refund pending' || lower === 'refunded') {
+      return {
+        label: 'Not Allotted',
+        colorClass: 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/25',
+        isStatusVisible: true
+      };
+    }
+    if (lower === 'withdrawn' || lower === 'cancelled') {
+      return {
+        label: 'Withdrawn',
+        colorClass: 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/25',
+        isStatusVisible: true
+      };
+    }
+    if (lower === 'sold') {
+      return {
+        label: 'Sold',
+        colorClass: 'bg-rose-500/10 text-rose-500 border-rose-500/25',
+        isStatusVisible: true
+      };
+    }
+    return {
+      label: rawStatus,
+      colorClass: 'bg-amber-500/10 text-amber-500 border-amber-500/25',
+      isStatusVisible: true
+    };
+  }
+  
+  if (isSold) {
+    return {
+      label: 'Sold',
+      colorClass: 'bg-rose-500/10 text-rose-500 border-rose-500/25',
+      isStatusVisible: true
+    };
+  }
+
+  return {
+    label: 'Active',
+    colorClass: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25',
+    isStatusVisible: false
+  };
 };
 
 /**
@@ -238,4 +381,18 @@ export const getConsolidatedHoldings = (
   });
 
   return results;
+};
+
+/**
+ * Single source of truth calculation for Active Holdings Count across the application.
+ * Groups investments by asset identity & platform, excludes pending/rejected/withdrawn IPOs & fully sold assets,
+ * and counts unique currently owned assets (currentQuantity > 0).
+ */
+export const calculateActiveHoldings = (
+  investments: Investment[],
+  allTransactions: Transaction[] = [],
+  marketPrices: Record<string, any> = {}
+): number => {
+  const consolidated = getConsolidatedHoldings(investments, allTransactions, marketPrices);
+  return consolidated.filter(isHoldingActive).length;
 };
