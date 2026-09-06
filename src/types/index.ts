@@ -161,3 +161,5 @@ export interface RecentActivity {
 }
 
 export * from './money';
+export * from './dividend';
+

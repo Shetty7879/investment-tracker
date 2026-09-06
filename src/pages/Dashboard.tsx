@@ -6,7 +6,8 @@ import {
   Plus,
   ArrowUpRight,
   ArrowDownRight,
-  Calendar
+  Calendar,
+  DollarSign
 } from 'lucide-react';
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
@@ -19,6 +20,11 @@ import {
   isDemoInvestment,
   isDemoTransaction
 } from '../services/portfolioCalculationService';
+import {
+  calculateTotalDividendIncome,
+  calculateMonthlyDividendIncome,
+  calculateUpcomingDividends
+} from '../utils/calculations';
 
 import { isHoldingActive, calculateActiveHoldings } from '../utils/consolidation';
 
@@ -45,8 +51,13 @@ export const Dashboard: React.FC = () => {
     transactions: allTransactions,
     marketPrices,
     dataTypeFilter,
-    ownerFilter
+    ownerFilter,
+    dividends
   } = useApp();
+
+  const totalDividendIncome = useMemo(() => calculateTotalDividendIncome(dividends), [dividends]);
+  const monthlyDividendIncome = useMemo(() => calculateMonthlyDividendIncome(dividends), [dividends]);
+  const upcomingDividendIncome = useMemo(() => calculateUpcomingDividends(dividends), [dividends]);
 
   // Modal State
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
@@ -459,6 +470,77 @@ export const Dashboard: React.FC = () => {
               </span>
             </div>
             <div className="p-2 rounded-lg bg-rose-500/5 text-rose-500">
+              <ArrowUpRight className="h-4 w-4" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Dividend Summary Section */}
+      <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-855 pb-2">
+          <h3 className="font-display text-sm font-semibold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
+            <span>💵 Dividend Income Summary</span>
+          </h3>
+          <button
+            onClick={() => navigateTo('dividends')}
+            className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-sans font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/20 rounded-lg transition-all cursor-pointer whitespace-nowrap active:scale-95"
+          >
+            View Dividends Tracker →
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Total Received */}
+          <div className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <span className="block text-[10px] font-sans font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                Total Net Dividends
+              </span>
+              <span className="font-display text-xl font-bold text-[#10b981] dark:text-[#36E6B4] block">
+                {formatCurrency(totalDividendIncome)}
+              </span>
+              <span className="font-sans text-[10px] text-slate-405 dark:text-slate-500 font-medium block mt-1">
+                Lifetime net dividend payouts
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <DollarSign className="h-4 w-4" />
+            </div>
+          </div>
+
+          {/* This Month */}
+          <div className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <span className="block text-[10px] font-sans font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                This Month
+              </span>
+              <span className="font-display text-xl font-bold text-[#f59e0b] dark:text-[#FFC94A] block">
+                {formatCurrency(monthlyDividendIncome)}
+              </span>
+              <span className="font-sans text-[10px] text-slate-405 dark:text-slate-500 font-medium block mt-1">
+                Payouts in current month
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+              <Calendar className="h-4 w-4" />
+            </div>
+          </div>
+
+          {/* Upcoming */}
+          <div className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <span className="block text-[10px] font-sans font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+                Upcoming Declared
+              </span>
+              <span className="font-display text-xl font-bold text-[#8b5cf6] dark:text-[#B77CFF] block">
+                {formatCurrency(upcomingDividendIncome)}
+              </span>
+              <span className="font-sans text-[10px] text-slate-405 dark:text-slate-500 font-medium block mt-1">
+                Declared & pending credit
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
               <ArrowUpRight className="h-4 w-4" />
             </div>
           </div>

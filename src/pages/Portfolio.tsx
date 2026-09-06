@@ -5,14 +5,16 @@ import type { Investment } from '../types';
 import { calculateTotalInvested, calculateMonthlyInvested, isDemoInvestment, isDemoTransaction } from '../services/portfolioCalculationService';
 import { getConsolidatedHoldings, isHoldingActive, isHoldingSold, getHoldingStatusBadgeInfo, formatQuantityWithUnit } from '../utils/consolidation';
 import type { ConsolidatedHolding } from '../utils/consolidation';
-import { Wallet, History, PlusCircle, MinusCircle, Scissors, Edit2, Trash2 } from 'lucide-react';
+import { Wallet, History, PlusCircle, MinusCircle, Scissors, Edit2, Trash2, DollarSign } from 'lucide-react';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
 import { TransactionModal } from '../components/TransactionModal';
 import { InvestmentModal } from '../components/InvestmentModal';
 import { SplitModal } from '../components/SplitModal';
+import { DividendModal } from '../components/DividendModal';
 import { PlatformBadge } from '../components/PlatformBadge';
 import { InlineDisclosureMenu } from '../components/ui/inline-disclosure-menu';
 import { ContinuousPagination } from '../components/ui/continuous-pagination';
+import { calculateHoldingDividends } from '../utils/calculations';
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '—';
@@ -29,7 +31,7 @@ const formatDate = (dateStr: string) => {
 };
 
 export const Portfolio: React.FC = () => {
-  const { formatCurrency, investments, transactions: allTransactions, marketPrices, dataTypeFilter, ownerFilter, deleteInvestment, deleteTransaction, showToast } = useApp();
+  const { formatCurrency, investments, transactions: allTransactions, marketPrices, dataTypeFilter, ownerFilter, deleteInvestment, deleteTransaction, showToast, dividends } = useApp();
   const { holdings } = usePortfolio();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -37,6 +39,15 @@ export const Portfolio: React.FC = () => {
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<ConsolidatedHolding | null>(null);
   const [txModalMode, setTxModalMode] = useState<'BUY' | 'SELL'>('BUY');
+
+  // Dividend Modal state
+  const [isDivModalOpen, setIsDivModalOpen] = useState(false);
+  const [divModalInvestmentId, setDivModalInvestmentId] = useState<string | undefined>(undefined);
+
+  const handleRecordDividend = (holding: ConsolidatedHolding) => {
+    setDivModalInvestmentId(holding.primaryInvestment.id);
+    setIsDivModalOpen(true);
+  };
 
   // Filter & Sort States
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -442,6 +453,7 @@ export const Portfolio: React.FC = () => {
                             { icon: <PlusCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />, label: "Buy", onClick: () => handleOpenBuy(holding) },
                             { icon: <MinusCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />, label: "Sell", onClick: () => handleOpenSell(holding) },
                             { icon: <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, label: "View Transactions", onClick: () => handleOpenTransactions(holding) },
+                            { icon: <DollarSign className="h-4 w-4 text-emerald-500" />, label: "Record Dividend", onClick: () => handleRecordDividend(holding) },
                             { icon: <Scissors className="h-4 w-4 text-amber-600 dark:text-amber-400" />, label: "Split", onClick: () => handleSplit(holding.primaryInvestment) },
                             { icon: <Edit2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />, label: "Edit", onClick: () => handleEdit(holding.primaryInvestment) }
                           ] : [
@@ -605,9 +617,29 @@ export const Portfolio: React.FC = () => {
                     <p className="text-xs text-slate-400 dark:text-slate-500 m-0 mt-1 font-semibold">
                       {`${selectedHolding.displayType} · ${selectedHolding.broker} (${selectedHolding.txCount} transaction${selectedHolding.txCount !== 1 ? 's' : ''})`}
                     </p>
+                    {(() => {
+                      const divInfo = calculateHoldingDividends(dividends, selectedHolding.primaryInvestment.id, selectedHolding.symbol);
+                      if (divInfo.count > 0) {
+                        return (
+                          <div className="mt-1.5 inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                            <DollarSign className="w-3.5 h-3.5" />
+                            <span>Dividends Received: {formatCurrency(divInfo.totalNet)} ({divInfo.count} payout{divInfo.count !== 1 ? 's' : ''})</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRecordDividend(selectedHolding)}
+                      className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-all cursor-pointer shadow-sm flex items-center space-x-1"
+                    >
+                      <DollarSign className="w-3.5 h-3.5" />
+                      <span>+ DIVIDEND</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleOpenBuy(selectedHolding)}
@@ -754,6 +786,13 @@ export const Portfolio: React.FC = () => {
         onClose={() => setIsTxModalOpen(false)}
         holding={selectedHolding}
         initialMode={txModalMode}
+      />
+
+      {/* Dividend Modal */}
+      <DividendModal
+        isOpen={isDivModalOpen}
+        onClose={() => setIsDivModalOpen(false)}
+        defaultInvestmentId={divModalInvestmentId}
       />
     </div>
   );

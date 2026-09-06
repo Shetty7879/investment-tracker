@@ -11,6 +11,7 @@ import { Goals } from './pages/Goals';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { MoneyTracker } from './pages/MoneyTracker';
+import { Dividends } from './pages/Dividends';
 import { Toast } from './components/Toast';
 import { PageTransition } from './components/PageTransition';
 import Login from './pages/Login';
@@ -26,6 +27,8 @@ const AppContent: React.FC = () => {
         return <Investments />;
       case 'portfolio':
         return <Portfolio />;
+      case 'dividends':
+        return <Dividends />;
 
       case 'monthly':
         return <Monthly />;

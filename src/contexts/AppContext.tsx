@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { storage } from '../utils/localStorage';
-import type { Investment, Goal, Transaction, MoneyRecord } from '../types';
+import type { Investment, Goal, Transaction, MoneyRecord, Dividend, ReinvestOptions } from '../types';
 import {
   DEFAULT_INVESTMENTS,
-  DEFAULT_GOALS
+  DEFAULT_GOALS,
+  DEFAULT_DIVIDENDS
 } from '../data/demoData';
+
 import { fetchMarketPrices } from '../services/marketDataService';
 import type { MarketPriceData } from '../services/marketDataService';
 import { isIndianMarketOpen, calculateHoldingMetrics } from '../services/portfolioCalculationService';
@@ -70,6 +72,11 @@ interface AppContextType {
   updateMoneyRecord: (record: MoneyRecord) => void;
   deleteMoneyRecord: (id: string) => void;
   markMoneyRecordReceived: (id: string) => void;
+  dividends: Dividend[];
+  addDividend: (div: Omit<Dividend, 'id' | 'createdAt'>, reinvestOptions?: ReinvestOptions) => void;
+  updateDividend: (div: Dividend) => void;
+  deleteDividend: (id: string) => void;
+  markDividendPaid: (id: string) => void;
   resetData: () => void;
   loadDemoData: () => void;
   clearDemoData: () => void;
@@ -143,6 +150,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [moneyRecords, setMoneyRecords] = useState<MoneyRecord[]>([]);
+  const [dividends, setDividends] = useState<Dividend[]>(() => {
+    return storage.get<Dividend[]>('fridaytrack_dividends', []);
+  });
+
+  useEffect(() => {
+    storage.set('fridaytrack_dividends', dividends);
+  }, [dividends]);
+
   const [isCloudDataLoading, setIsCloudDataLoading] = useState(true);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -196,7 +211,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Hash-based Router State
   const [activeTab, setActiveTab] = useState<string>(() => {
     const hash = window.location.hash.replace('#/', '');
-    const validTabs = ['dashboard', 'investments', 'portfolio', 'monthly', 'goals', 'reports', 'settings', 'money-tracker'];
+    const validTabs = ['dashboard', 'investments', 'portfolio', 'monthly', 'goals', 'reports', 'settings', 'money-tracker', 'dividends'];
     return validTabs.includes(hash) ? hash : 'dashboard';
   });
 
@@ -749,6 +764,102 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // CRUD for Dividend Records
+  const addDividend = (
+    divData: Omit<Dividend, 'id' | 'createdAt'>,
+    reinvestOptions?: ReinvestOptions
+  ) => {
+    const newId = 'div_' + Math.random().toString(36).substring(2, 11);
+    const nowStr = new Date().toISOString();
+
+    const newDividend: Dividend = {
+      ...divData,
+      id: newId,
+      createdAt: nowStr,
+      updatedAt: nowStr
+    };
+
+    if (reinvestOptions?.reinvest && reinvestOptions.price && reinvestOptions.price > 0) {
+      const parentInv = investments.find(i => i.id === divData.investmentId);
+      if (parentInv) {
+        const reinvestAmount = divData.netDividend;
+        const reinvestPrice = reinvestOptions.price;
+        const reinvestQty = Math.floor(reinvestAmount / reinvestPrice) || (reinvestAmount / reinvestPrice);
+
+        const newTx: Omit<Transaction, 'id' | 'createdAt'> = {
+          investmentId: parentInv.id,
+          type: 'BUY',
+          quantity: reinvestQty,
+          price: reinvestPrice,
+          amount: reinvestAmount,
+          charges: 0,
+          date: reinvestOptions.buyDate || divData.dividendDate || new Date().toISOString().split('T')[0],
+          notes: `Dividend Reinvestment from ${divData.assetName} (Net Dividend: ₹${divData.netDividend})`,
+          isDemo: !!divData.isDemo
+        };
+
+        const txId = generateId();
+        const createdTx: Transaction = {
+          ...newTx,
+          id: txId,
+          createdAt: nowStr
+        };
+
+        const nextTxs = [createdTx, ...transactions];
+        const nextInvs = investments.map(inv => {
+          if (inv.id === parentInv.id) {
+            const parentTxs = nextTxs.filter(t => t.investmentId === inv.id);
+            const metrics = calculateHoldingMetrics(inv, parentTxs, marketPrices);
+            return {
+              ...inv,
+              quantity: metrics.quantity,
+              buyPrice: metrics.buyPrice,
+              investedAmount: metrics.investedAmount,
+              updatedAt: nowStr
+            };
+          }
+          return inv;
+        });
+
+        setTransactions(nextTxs);
+        setInvestments(nextInvs);
+
+        newDividend.reinvested = true;
+        newDividend.status = 'Reinvested';
+        newDividend.reinvestedInvestmentId = parentInv.id;
+      }
+    }
+
+    setDividends(prev => [newDividend, ...prev]);
+    showToast('Dividend recorded successfully!', 'success');
+  };
+
+  const updateDividend = (updatedDiv: Dividend) => {
+    setDividends(prev => prev.map(d => d.id === updatedDiv.id ? { ...updatedDiv, updatedAt: new Date().toISOString() } : d));
+    showToast('Dividend record updated!', 'success');
+  };
+
+  const deleteDividend = (id: string) => {
+    setDividends(prev => prev.filter(d => d.id !== id));
+    showToast('Dividend record deleted.', 'info');
+  };
+
+  const markDividendPaid = (id: string) => {
+    setDividends(prev => prev.map(d => {
+      if (d.id === id) {
+        return {
+          ...d,
+          status: 'Paid',
+          paymentDate: d.paymentDate || new Date().toISOString().split('T')[0],
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return d;
+    }));
+    showToast('Dividend marked as Paid!', 'success');
+  };
+
+
   // Load Demo Investments Data (State-only)
   const loadDemoData = () => {
     if (window.confirm('Load sample investment data for testing?')) {
@@ -859,6 +970,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return [...withoutDemo, ...demoMoneyRecords];
       });
 
+      setDividends(prev => {
+        const withoutDemo = prev.filter(d => !d.isDemo);
+        return [...withoutDemo, ...DEFAULT_DIVIDENDS];
+      });
+
       // Force filter to All so loaded demo data is immediately displayed
       setDataTypeFilter('All');
       showToast('Demo dataset loaded successfully.', 'success');
@@ -871,6 +987,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setInvestments(prev => prev.filter(inv => !inv.isDemo));
     setTransactions(prev => prev.filter(tx => !tx.isDemo));
     setMoneyRecords(prev => prev.filter(r => !r.isDemo));
+    setDividends(prev => prev.filter(d => !d.isDemo));
     setDataTypeFilter('Real'); // Toggle filter back to Real Data
     showToast('Demo dataset cleared.', 'info');
   };
@@ -1168,6 +1285,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateMoneyRecord,
         deleteMoneyRecord,
         markMoneyRecordReceived,
+        dividends,
+        addDividend,
+        updateDividend,
+        deleteDividend,
+        markDividendPaid,
         resetData,
         loadDemoData,
         clearDemoData,

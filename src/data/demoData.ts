@@ -191,3 +191,43 @@ export const DEFAULT_GOALS: Goal[] = [
     progressMode: 'Manual'
   }
 ];
+
+export const DEFAULT_DIVIDENDS: any[] = [
+  {
+    id: 'div-1',
+    investmentId: '1',
+    symbol: 'RELIANCE',
+    assetName: 'Reliance Industries',
+    broker: 'Dhan',
+    eligibleQuantity: 4,
+    dividendPerShare: 10,
+    grossDividend: 40,
+    tax: 0,
+    netDividend: 40,
+    dividendDate: '2026-08-15',
+    paymentDate: '2026-08-20',
+    status: 'Paid',
+    notes: 'Final dividend for FY26',
+    isDemo: true,
+    createdAt: '2026-08-15T10:00:00.000Z'
+  },
+  {
+    id: 'div-2',
+    investmentId: '2',
+    symbol: 'TCS',
+    assetName: 'TCS',
+    broker: 'Dhan',
+    eligibleQuantity: 2,
+    dividendPerShare: 28,
+    grossDividend: 56,
+    tax: 5.6,
+    netDividend: 50.4,
+    dividendDate: '2026-09-01',
+    paymentDate: '2026-09-10',
+    status: 'Upcoming',
+    notes: 'Interim dividend',
+    isDemo: true,
+    createdAt: '2026-09-01T10:00:00.000Z'
+  }
+];
+
