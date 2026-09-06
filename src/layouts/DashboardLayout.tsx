@@ -12,7 +12,8 @@ import {
   Coins,
   Wallet,
   Menu,
-  X
+  X,
+  DollarSign
 } from 'lucide-react';
 import { EditProfile } from '../components/ui/edit-profile';
 import { SwitchMode } from '../components/ui/switch-mode';
@@ -36,7 +37,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
     { id: 'dashboard', name: '📊 Dashboard', icon: LayoutDashboard },
     { id: 'investments', name: '📈 Investments', icon: Briefcase },
     { id: 'portfolio', name: '💼 Portfolio', icon: Wallet },
-    { id: 'dividends', name: '💵 Dividends', icon: Coins },
+    { id: 'dividends', name: '💰 Dividends', icon: DollarSign },
     { id: 'monthly', name: '🗓️ Monthly', icon: Calendar },
     { id: 'goals', name: '🎯 Goals', icon: Target },
     { id: 'reports', name: '📑 Reports', icon: BarChart3 },

@@ -14,7 +14,8 @@ import {
   Eye,
   TrendingUp,
   Building2,
-  RefreshCw
+  RefreshCw,
+  Filter
 } from 'lucide-react';
 import {
   calculateTotalDividendIncome,
@@ -160,11 +161,11 @@ export const Dividends: React.FC = () => {
               <DollarSign className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white font-['Space_Grotesk'] tracking-tight">
-                Dividend Income Tracker
+              <h1 className="text-2xl sm:text-3xl font-bold text-white font-['Space_Grotesk'] tracking-tight uppercase">
+                DIVIDENDS
               </h1>
               <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
-                Track gross/net dividend payouts, TDS, upcoming payments, and reinvestments
+                Track your dividend income separately from invested capital.
               </p>
             </div>
           </div>
@@ -182,11 +183,11 @@ export const Dividends: React.FC = () => {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* Total Dividend Income */}
+        {/* TOTAL DIVIDENDS */}
         <div className="p-5 rounded-2xl bg-[#121824] border border-gray-800 hover:border-gray-700/60 transition-all shadow-lg">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Total Dividend Income
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-['Space_Grotesk']">
+              TOTAL DIVIDENDS
             </span>
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
               <DollarSign className="w-4 h-4" />
@@ -203,11 +204,11 @@ export const Dividends: React.FC = () => {
           </div>
         </div>
 
-        {/* This Year */}
+        {/* THIS YEAR */}
         <div className="p-5 rounded-2xl bg-[#121824] border border-gray-800 hover:border-gray-700/60 transition-all shadow-lg">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              This Year ({new Date().getFullYear()})
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-['Space_Grotesk']">
+              THIS YEAR ({new Date().getFullYear()})
             </span>
             <div className="p-2 rounded-xl bg-cyan-500/10 text-[#5CC8FF]">
               <TrendingUp className="w-4 h-4" />
@@ -223,11 +224,11 @@ export const Dividends: React.FC = () => {
           </div>
         </div>
 
-        {/* This Month */}
+        {/* THIS MONTH */}
         <div className="p-5 rounded-2xl bg-[#121824] border border-gray-800 hover:border-gray-700/60 transition-all shadow-lg">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              This Month
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-['Space_Grotesk']">
+              THIS MONTH
             </span>
             <div className="p-2 rounded-xl bg-amber-500/10 text-[#FFC94A]">
               <Calendar className="w-4 h-4" />
@@ -243,11 +244,11 @@ export const Dividends: React.FC = () => {
           </div>
         </div>
 
-        {/* Upcoming Dividends */}
+        {/* UPCOMING */}
         <div className="p-5 rounded-2xl bg-[#121824] border border-gray-800 hover:border-gray-700/60 transition-all shadow-lg">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Upcoming Payouts
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider font-['Space_Grotesk']">
+              UPCOMING
             </span>
             <div className="p-2 rounded-xl bg-purple-500/10 text-[#B77CFF]">
               <Clock className="w-4 h-4" />
@@ -258,7 +259,7 @@ export const Dividends: React.FC = () => {
               ₹{upcomingIncome.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-xs text-gray-400 mt-1">
-              Declared & pending payment
+              Declared & pending credit
             </div>
           </div>
         </div>
@@ -276,7 +277,7 @@ export const Dividends: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by asset name, symbol, or broker..."
+              placeholder="Search dividends..."
               className="w-full pl-10 pr-4 py-2.5 bg-[#171e2e] border border-gray-700/60 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
@@ -291,28 +292,27 @@ export const Dividends: React.FC = () => {
                 onChange={(e) => setPlatformFilter(e.target.value)}
                 className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer"
               >
-                <option value="All" className="bg-[#171e2e]">All Platforms</option>
+                <option value="All" className="bg-[#171e2e]">All Platforms ▼</option>
                 {platforms.map(p => (
                   <option key={p} value={p} className="bg-[#171e2e]">{p}</option>
                 ))}
               </select>
             </div>
 
-            {/* Status Tabs */}
-            <div className="flex items-center p-1 bg-[#171e2e] border border-gray-700/60 rounded-xl overflow-x-auto scrollbar-none">
-              {['All', 'Paid', 'Upcoming', 'Declared', 'Reinvested'].map(st => (
-                <button
-                  key={st}
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
-                    statusFilter === st
-                      ? 'bg-purple-600 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
+            {/* Status Dropdown */}
+            <div className="flex items-center space-x-1.5 px-3 py-2 bg-[#171e2e] border border-gray-700/60 rounded-xl">
+              <Filter className="w-3.5 h-3.5 text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="All" className="bg-[#171e2e]">All Status ▼</option>
+                <option value="Paid" className="bg-[#171e2e]">Paid</option>
+                <option value="Upcoming" className="bg-[#171e2e]">Upcoming</option>
+                <option value="Declared" className="bg-[#171e2e]">Declared</option>
+                <option value="Reinvested" className="bg-[#171e2e]">Reinvested</option>
+              </select>
             </div>
           </div>
 
@@ -325,30 +325,41 @@ export const Dividends: React.FC = () => {
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-[#171e2e] border-b border-gray-800 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                <th className="py-3.5 px-4">Date</th>
-                <th className="py-3.5 px-4">Asset</th>
-                <th className="py-3.5 px-4">Platform</th>
-                <th className="py-3.5 px-4 text-right">Eligible Qty</th>
-                <th className="py-3.5 px-4 text-right">Div / Share</th>
-                <th className="py-3.5 px-4 text-right">Gross</th>
+                <th className="py-3.5 px-4">DATE</th>
+                <th className="py-3.5 px-4">ASSET</th>
+                <th className="py-3.5 px-4">PLATFORM</th>
+                <th className="py-3.5 px-4 text-right">QUANTITY</th>
+                <th className="py-3.5 px-4 text-right">DIVIDEND / UNIT</th>
+                <th className="py-3.5 px-4 text-right">GROSS</th>
                 <th className="py-3.5 px-4 text-right">TDS</th>
-                <th className="py-3.5 px-4 text-right">Net Dividend</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4 text-center">Actions</th>
+                <th className="py-3.5 px-4 text-right">NET</th>
+                <th className="py-3.5 px-4 text-center">STATUS</th>
+                <th className="py-3.5 px-4 text-center">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/60 text-xs">
               {filteredDividends.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center space-y-2">
-                      <DollarSign className="w-8 h-8 text-gray-600" />
-                      <p className="text-sm font-medium">No dividend records found</p>
-                      <p className="text-xs text-gray-500">
-                        {searchQuery || statusFilter !== 'All'
-                          ? 'Try adjusting your search or status filters.'
-                          : 'Click "Record Dividend" above to log your first dividend payout.'}
+                  <td colSpan={10} className="py-14 text-center text-gray-400">
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                      <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-400">
+                        <DollarSign className="w-8 h-8" />
+                      </div>
+                      <p className="text-base font-bold text-white font-['Space_Grotesk']">
+                        No dividend records yet
                       </p>
+                      <p className="text-xs text-gray-400 max-w-sm">
+                        {searchQuery || statusFilter !== 'All' || platformFilter !== 'All'
+                          ? 'No dividend payouts match your search filters.'
+                          : 'Record your dividend payouts to track gross/net income, TDS, and yield.'}
+                      </p>
+                      <button
+                        onClick={handleOpenAddModal}
+                        className="mt-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center space-x-1.5"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Record Your First Dividend</span>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -358,12 +369,12 @@ export const Dividends: React.FC = () => {
                     key={div.id}
                     className="hover:bg-[#171e2e]/50 transition-colors"
                   >
-                    {/* Date */}
+                    {/* DATE */}
                     <td className="py-3.5 px-4 text-gray-300 whitespace-nowrap font-medium">
                       {formatDisplayDate(div.paymentDate || div.dividendDate)}
                     </td>
 
-                    {/* Asset */}
+                    {/* ASSET */}
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="font-semibold text-white">
                         {div.assetName}
@@ -375,44 +386,44 @@ export const Dividends: React.FC = () => {
                       )}
                     </td>
 
-                    {/* Platform */}
+                    {/* PLATFORM */}
                     <td className="py-3.5 px-4 text-gray-300 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300 text-[11px]">
                         {div.broker || 'Broker'}
                       </span>
                     </td>
 
-                    {/* Quantity */}
+                    {/* QUANTITY */}
                     <td className="py-3.5 px-4 text-right text-gray-200 font-['Space_Grotesk'] font-medium">
                       {div.eligibleQuantity}
                     </td>
 
-                    {/* Div / Share */}
+                    {/* DIVIDEND / UNIT */}
                     <td className="py-3.5 px-4 text-right text-gray-300 font-['Space_Grotesk']">
                       ₹{div.dividendPerShare.toFixed(2)}
                     </td>
 
-                    {/* Gross */}
+                    {/* GROSS */}
                     <td className="py-3.5 px-4 text-right text-gray-300 font-['Space_Grotesk']">
                       ₹{div.grossDividend.toFixed(2)}
                     </td>
 
-                    {/* Tax */}
+                    {/* TDS */}
                     <td className="py-3.5 px-4 text-right text-red-400 font-['Space_Grotesk']">
                       {div.tax > 0 ? `-₹${div.tax.toFixed(2)}` : '₹0.00'}
                     </td>
 
-                    {/* Net Dividend */}
+                    {/* NET */}
                     <td className="py-3.5 px-4 text-right font-bold text-[#36E6B4] font-['Space_Grotesk']">
                       ₹{div.netDividend.toFixed(2)}
                     </td>
 
-                    {/* Status */}
+                    {/* STATUS */}
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
                       {getStatusBadge(div.status)}
                     </td>
 
-                    {/* Actions Menu */}
+                    {/* ACTIONS */}
                     <td className="py-3.5 px-4 text-center relative whitespace-nowrap">
                       <button
                         onClick={() => setOpenMenuId(openMenuId === div.id ? null : div.id)}

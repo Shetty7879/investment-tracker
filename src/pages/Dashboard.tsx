@@ -477,13 +477,19 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Dividend Summary Section */}
-      <div className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300">
+      <div
+        onClick={() => navigateTo('dividends')}
+        className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-800 transition-all duration-300 cursor-pointer"
+      >
         <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-855 pb-2">
           <h3 className="font-display text-sm font-semibold text-slate-900 dark:text-white m-0 flex items-center gap-1.5">
-            <span>💵 Dividend Income Summary</span>
+            <span>💵 DIVIDEND INCOME</span>
           </h3>
           <button
-            onClick={() => navigateTo('dividends')}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigateTo('dividends');
+            }}
             className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-sans font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/10 hover:border-emerald-500/20 rounded-lg transition-all cursor-pointer whitespace-nowrap active:scale-95"
           >
             View Dividends Tracker →
