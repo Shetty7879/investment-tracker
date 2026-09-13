@@ -1,6 +1,7 @@
 import type { Investment, Transaction, Goal } from '../types';
 import type { MarketPriceData } from './marketDataService';
 import { calculateFDDetails, getMutualFundMetrics, getMutualFundTransactionMetrics } from '../utils/calculations';
+import { getConsolidatedHoldings } from '../utils/consolidation';
 
 export interface HoldingMetrics extends Investment {
   quantity: number;
@@ -647,6 +648,7 @@ export const calculateTotalInvested = (
   realInvs.forEach(inv => {
     const invTxs = realTxs.filter(tx => tx.investmentId === inv.id);
     const buyTxs = invTxs.filter(tx => tx.type === 'BUY');
+    const sellTxs = invTxs.filter(tx => tx.type === 'SELL');
     const category = inv.category || inv.assetType || 'Stocks';
 
     let contribution = 0;
@@ -695,9 +697,16 @@ export const calculateTotalInvested = (
       }
     }
 
-    const sellTxs = invTxs.filter(tx => tx.type === 'SELL');
-    const soldAmount = sellTxs.reduce((sum, tx) => sum + (tx.quantity * tx.price), 0);
-    contribution = Math.max(0, contribution - soldAmount);
+    if (sellTxs.length > 0) {
+      const totalBuyQty = buyTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0) || (inv.quantity || 1);
+      const totalSellQty = sellTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+      if (totalSellQty >= totalBuyQty) {
+        contribution = 0;
+      } else {
+        const soldCostBasis = sellTxs.reduce((sum, tx) => sum + ((tx.quantity || 0) * (tx.price || inv.buyPrice || 0)), 0);
+        contribution = Math.max(0, contribution - soldCostBasis);
+      }
+    }
 
     total += contribution;
   });
@@ -765,13 +774,20 @@ export const calculateTotalInvestedByPlatform = (
       }
     }
 
-    const soldAmount = sellTxs.reduce((sum, tx) => sum + (tx.quantity * tx.price), 0);
-    contribution = Math.max(0, contribution - soldAmount);
+    if (sellTxs.length > 0) {
+      const totalBuyQty = buyTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0) || (inv.quantity || 1);
+      const totalSellQty = sellTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0);
+      if (totalSellQty >= totalBuyQty) {
+        contribution = 0;
+      } else {
+        const soldCostBasis = sellTxs.reduce((sum, tx) => sum + ((tx.quantity || 0) * (tx.price || inv.buyPrice || 0)), 0);
+        contribution = Math.max(0, contribution - soldCostBasis);
+      }
+    }
 
     platformMap[broker] = (platformMap[broker] || 0) + contribution;
   });
 
-  // Round platform totals at the very end
   const roundedPlatformMap: Record<string, number> = {};
   Object.entries(platformMap).forEach(([broker, amount]) => {
     roundedPlatformMap[broker] = safeRound(amount);
