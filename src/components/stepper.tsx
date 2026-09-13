@@ -114,9 +114,9 @@ export function Stepper({
       const clamped = Math.max(min, Math.min(max, parsed));
       if (clamped !== current) {
         setDirection(clamped > current ? 1 : -1);
-        if (!isControlled) setInternal(clamped);
-        onChange?.(clamped);
       }
+      if (!isControlled) setInternal(clamped);
+      onChange?.(clamped);
     }
   };
 
