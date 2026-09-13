@@ -1,7 +1,7 @@
 import type { Investment, Transaction, Goal } from '../types';
 import type { MarketPriceData } from './marketDataService';
 import { calculateFDDetails, getMutualFundMetrics, getMutualFundTransactionMetrics } from '../utils/calculations';
-import { getConsolidatedHoldings } from '../utils/consolidation';
+import { getConsolidatedHoldings, isHoldingActive } from '../utils/consolidation';
 
 export interface HoldingMetrics extends Investment {
   quantity: number;
@@ -276,6 +276,17 @@ export const calculateHoldingMetrics = (
       }
     }
   });
+
+  const explicitBuyTxs = allTxs.filter(tx => tx.investmentId === inv.id && tx.type === 'BUY' && !tx.id.startsWith('fallback-tx'));
+  if (totalInvestedCost === 0 && explicitBuyTxs.length === 0 && inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+    const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+    if (!isNaN(parsed) && isFinite(parsed)) {
+      totalInvestedCost = parsed;
+      if (currentQuantity > 0) {
+        averageBuyPrice = totalInvestedCost / currentQuantity;
+      }
+    }
+  }
 
   // IPO-specific holdings override
   let appliedAmount: number | undefined = undefined;
@@ -624,168 +635,41 @@ export const getEffectiveTransactionCost = (tx: Transaction, inv: Investment): n
 };
 
 /**
- * Calculates the total lifetime capital invested by the user.
- *
- * Rules:
- * - IPOs: count only allotted amount (allottedQty x issuePrice + charges). Unallotted = 0.
- * - Commodities (Gold/Silver/Platinum): use inv.investedAmount field (matches calculateHoldingMetrics).
- *   Falls back to summing tx.price per BUY (tx.price = total amount paid, not per-gram rate).
- * - Mutual Funds: use getMutualFundTransactionMetrics(tx).amount per BUY tx.
- * - Stocks / ETFs / FD / Savings: use tx.amount per BUY tx, fallback qty x price.
- * - SELL / SPLIT / DIVIDEND / INTEREST / CHARGE: all ignored.
- * - Legacy (no BUY transactions): use inv.investedAmount, fallback qty x buyPrice + charges.
- * - Demo investments: always excluded.
+ * Calculates the total active capital invested by the user across active holdings.
+ * Excludes sold holdings (quantity = 0 or status = 'SOLD') and demo investments.
  */
 export const calculateTotalInvested = (
   investments: Investment[],
   transactions: Transaction[]
 ): number => {
-  const realInvs = investments.filter(inv => !isDemoInvestment(inv));
-  const realTxs = transactions.filter(tx => !isDemoTransaction(tx, investments));
-
+  const consolidated = getConsolidatedHoldings(investments, transactions);
   let total = 0;
 
-  realInvs.forEach(inv => {
-    const invTxs = realTxs.filter(tx => tx.investmentId === inv.id);
-    const buyTxs = invTxs.filter(tx => tx.type === 'BUY');
-    const sellTxs = invTxs.filter(tx => tx.type === 'SELL');
-    const category = inv.category || inv.assetType || 'Stocks';
-
-    let contribution = 0;
-
-    if (category === 'IPOs') {
-      const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
-      const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
-      if (isAllotted) {
-        const allottedQty = inv.ipoQuantityAllotted ?? inv.quantity ?? 0;
-        const issuePrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
-        contribution = allottedQty * issuePrice + (inv.charges ?? 0);
-      }
-      // else contribution stays 0
-
-    } else if (isCommodityCategory(category)) {
-      if (buyTxs.length > 0) {
-        contribution = buyTxs.reduce((sum, tx) => {
-          const cost = getEffectiveTransactionCost(tx, inv);
-          return sum + cost + (tx.charges ?? 0);
-        }, 0);
-      } else if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
-        const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
-        if (!isNaN(parsed) && isFinite(parsed)) {
-          contribution = parsed;
-        }
-      } else {
-        const qty = inv.weightGrams ?? inv.quantity ?? 1;
-        const price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
-        contribution = qty * price + (inv.charges ?? 0);
-      }
-
-    } else if (buyTxs.length > 0) {
-      contribution = buyTxs.reduce((sum, tx) => {
-        const cost = getEffectiveTransactionCost(tx, inv);
-        return sum + cost + (tx.charges ?? 0);
-      }, 0);
-
-    } else {
-      // Legacy investment with no BUY transactions
-      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
-        contribution = inv.investedAmount;
-      } else {
-        const qty = inv.quantity ?? 1;
-        const price = inv.buyPrice ?? inv.currentPrice ?? 0;
-        contribution = qty * price + (inv.charges ?? 0);
-      }
+  consolidated.forEach(h => {
+    if (!h.isDemo && isHoldingActive(h)) {
+      total += h.investedAmount;
     }
-
-    if (sellTxs.length > 0) {
-      const totalBuyQty = buyTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0) || (inv.quantity || 1);
-      const totalSellQty = sellTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0);
-      if (totalSellQty >= totalBuyQty) {
-        contribution = 0;
-      } else {
-        const soldCostBasis = sellTxs.reduce((sum, tx) => sum + ((tx.quantity || 0) * (tx.price || inv.buyPrice || 0)), 0);
-        contribution = Math.max(0, contribution - soldCostBasis);
-      }
-    }
-
-    total += contribution;
   });
 
   return safeRound(total);
 };
 
-
 /**
- * Returns a map of platform → lifetime invested capital, using the same rules as calculateTotalInvested.
+ * Returns a map of platform → active invested capital, using the same rules as calculateTotalInvested.
  * Guarantees: sum(result.values()) === calculateTotalInvested(investments, transactions)
  */
 export const calculateTotalInvestedByPlatform = (
   investments: Investment[],
   transactions: Transaction[]
 ): Record<string, number> => {
-  const realInvs = investments.filter(inv => !isDemoInvestment(inv));
-  const realTxs = transactions.filter(tx => !isDemoTransaction(tx, investments));
-
+  const consolidated = getConsolidatedHoldings(investments, transactions);
   const platformMap: Record<string, number> = {};
 
-  realInvs.forEach(inv => {
-    const invTxs = realTxs.filter(tx => tx.investmentId === inv.id);
-    const buyTxs = invTxs.filter(tx => tx.type === 'BUY');
-    const sellTxs = invTxs.filter(tx => tx.type === 'SELL');
-    const category = inv.category || inv.assetType || 'Stocks';
-    const broker = (inv.broker === 'Other' ? (inv.customBroker || 'Other') : (inv.broker || 'Other')) || 'Other';
-
-    let contribution = 0;
-
-    if (category === 'IPOs') {
-      const status = inv.ipoAllotmentStatus || inv.allotmentStatus || 'Applied';
-      const isAllotted = ['Allotted', 'Partially Allotted', 'Listed', 'Sold'].includes(status);
-      if (isAllotted) {
-        const allottedQty = inv.ipoQuantityAllotted ?? inv.quantity ?? 0;
-        const issuePrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
-        contribution = allottedQty * issuePrice + (inv.charges ?? 0);
-      }
-    } else if (isCommodityCategory(category)) {
-      if (buyTxs.length > 0) {
-        contribution = buyTxs.reduce((sum, tx) => {
-          const cost = getEffectiveTransactionCost(tx, inv);
-          return sum + cost + (tx.charges ?? 0);
-        }, 0);
-      } else if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
-        const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
-        if (!isNaN(parsed) && isFinite(parsed)) contribution = parsed;
-      } else {
-        const qty = inv.weightGrams ?? inv.quantity ?? 1;
-        const price = inv.buyPricePerGram ?? inv.buyPrice ?? 0;
-        contribution = qty * price + (inv.charges ?? 0);
-      }
-    } else if (buyTxs.length > 0) {
-      contribution = buyTxs.reduce((sum, tx) => {
-        const cost = getEffectiveTransactionCost(tx, inv);
-        return sum + cost + (tx.charges ?? 0);
-      }, 0);
-    } else {
-      if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
-        contribution = inv.investedAmount;
-      } else {
-        const qty = inv.quantity ?? 1;
-        const price = inv.buyPrice ?? inv.currentPrice ?? 0;
-        contribution = qty * price + (inv.charges ?? 0);
-      }
+  consolidated.forEach(h => {
+    if (!h.isDemo && isHoldingActive(h)) {
+      const broker = h.broker || 'Other';
+      platformMap[broker] = (platformMap[broker] || 0) + h.investedAmount;
     }
-
-    if (sellTxs.length > 0) {
-      const totalBuyQty = buyTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0) || (inv.quantity || 1);
-      const totalSellQty = sellTxs.reduce((sum, tx) => sum + (tx.quantity || 0), 0);
-      if (totalSellQty >= totalBuyQty) {
-        contribution = 0;
-      } else {
-        const soldCostBasis = sellTxs.reduce((sum, tx) => sum + ((tx.quantity || 0) * (tx.price || inv.buyPrice || 0)), 0);
-        contribution = Math.max(0, contribution - soldCostBasis);
-      }
-    }
-
-    platformMap[broker] = (platformMap[broker] || 0) + contribution;
   });
 
   const roundedPlatformMap: Record<string, number> = {};

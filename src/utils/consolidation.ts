@@ -100,18 +100,20 @@ export const getHoldingGroupKey = (inv: {
   broker?: string;
   customBroker?: string;
   symbol?: string;
+  isDemo?: boolean;
 }): string => {
   const cat = normalizeCategory(inv.category || inv.assetType);
   const broker = (inv.broker === 'Other' && inv.customBroker ? inv.customBroker : (inv.broker || 'Other')).trim().toLowerCase();
   const assetName = inv.assetName.trim().toLowerCase().replace(/\s+/g, ' ');
   const symbol = inv.symbol ? inv.symbol.trim().toLowerCase() : '';
+  const demoPrefix = inv.isDemo ? 'demo::' : '';
   
-  return `${cat}::${broker}::${assetName}${symbol ? '::' + symbol : ''}`;
+  return `${demoPrefix}${cat}::${broker}::${assetName}${symbol ? '::' + symbol : ''}`;
 };
 
 /**
  * Helper to determine if a consolidated holding or investment is currently active (user owns the asset).
- * For IPOs: ONLY 'Allotted' or 'Shares Received' with quantity > 0 is considered Active.
+ * For IPOs: ONLY 'Allotted', 'Partially Allotted', 'Listed', or 'Shares Received' with quantity > 0 is considered Active.
  * Applied / Pending Allotment, Not Allotted, Refunded, Withdrawn, Cancelled are NOT Active.
  */
 export const isHoldingActive = (h: {
@@ -130,7 +132,7 @@ export const isHoldingActive = (h: {
   
   if (category === 'IPOs') {
     const rawStatus = (h.ipoAllotmentStatus || h.allotmentStatus || h.primaryInvestment?.ipoAllotmentStatus || h.primaryInvestment?.allotmentStatus || 'Applied').trim().toLowerCase();
-    const isAllotted = rawStatus === 'allotted' || rawStatus === 'shares received';
+    const isAllotted = rawStatus === 'allotted' || rawStatus === 'partially allotted' || rawStatus === 'listed' || rawStatus === 'shares received';
     return isAllotted && qty > 0;
   }
   
@@ -296,8 +298,10 @@ export const getConsolidatedHoldings = (
     // 1. Gather explicit transactions from allTransactions
     allTransactions.forEach(tx => {
       if (groupInvIds.has(tx.investmentId) && !seenTxIds.has(tx.id)) {
-        seenTxIds.add(tx.id);
-        groupTxs.push(tx);
+        if (!!tx.isDemo === !!primaryInv.isDemo) {
+          seenTxIds.add(tx.id);
+          groupTxs.push(tx);
+        }
       }
     });
 

@@ -242,7 +242,7 @@ describe('Transaction Modal Engine & Verification Scenarios', () => {
     };
 
     const newTotal = calculateTotalInvested([inv10k], [txBuy, txSell]);
-    expect(newTotal).toBe(9371.80);
+    expect(newTotal).toBe(9000);
   });
 
 });

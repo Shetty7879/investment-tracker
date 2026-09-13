@@ -1859,7 +1859,7 @@ describe('Portfolio Calculation Service Unit Tests', () => {
         { id: 'tx1', investmentId: inv.id, type: 'BUY', quantity: 10, price: 100, amount: 1000, charges: 0, date: '2026-08-10', isDemo: false, createdAt: '' },
         { id: 'tx2', investmentId: inv.id, type: 'SELL', quantity: 5, price: 150, amount: 750, charges: 0, date: '2026-08-15', isDemo: false, createdAt: '' }
       ];
-      expect(calculateTotalInvested([inv], txs)).toBe(250);
+      expect(calculateTotalInvested([inv], txs)).toBe(500);
     });
 
     test('6. Partial SELL calculates cost basis of remaining shares correctly', () => {
@@ -1995,13 +1995,13 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       expect(calculateTotalInvested([inv], [])).toBe(15010);
     });
 
-    test('23. IPO later sold does not reduce Total Invested', () => {
+    test('23. IPO later sold returns 0 for Total Invested (active holdings only)', () => {
       const inv = getBaseStock({ category: 'IPOs', ipoAllotmentStatus: 'Sold', ipoQuantityAllotted: 50, ipoAllotmentPrice: 300, quantity: 50, buyPrice: 300, charges: 10 });
-      expect(calculateTotalInvested([inv], [])).toBe(15010);
+      expect(calculateTotalInvested([inv], [])).toBe(0);
     });
 
     test('24. Legacy investment with no transactions falls back to investedAmount', () => {
-      const inv = getBaseStock({ investedAmount: 1050 });
+      const inv = getBaseStock({ quantity: 10, investedAmount: 1050 });
       expect(calculateTotalInvested([inv], [])).toBe(1050);
     });
 
@@ -2208,7 +2208,7 @@ describe('Portfolio Calculation Service Unit Tests', () => {
         makeTx({ id: 'tx1', investmentId: 'test-3', type: 'BUY', quantity: 10, price: 100, amount: 1000, charges: 0, date: '2026-01-10' }),
         makeTx({ id: 'tx2', investmentId: 'test-3', type: 'SELL', quantity: 5, price: 150, amount: 750, charges: 0, date: '2026-01-20' }),
       ];
-      expect(calculateTotalInvested([inv], txs)).toBe(250);
+      expect(calculateTotalInvested([inv], txs)).toBe(500);
     });
 
     // TEST 4: BUY ₹1,000, STOCK SPLIT → invested = ₹1,000
@@ -2613,9 +2613,9 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       // July: 500 only
       expect(julyMonthly).toBe(500);
 
-      // Total invested = all BUY txs minus SELL txs (825.76 + 100 + 500 + 500 - 240 = 1685.76)
+      // Total invested = active cost basis of remaining active holdings
       const totalInvested = calculateTotalInvested([stock, mf], txs);
-      expect(totalInvested).toBe(safeRound(825.76 + 100 + 500 + 500 - 240));
+      expect(totalInvested).toBe(1722.08);
     });
   });
 });
