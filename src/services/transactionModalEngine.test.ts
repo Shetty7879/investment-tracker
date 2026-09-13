@@ -204,6 +204,7 @@ describe('Transaction Modal Engine & Verification Scenarios', () => {
       quantity: 10,
       buyPrice: 1000,
       buyDate: '2026-09-01',
+      purchaseDate: '2026-09-01',
       broker: 'Dhan',
       investedAmount: 10000,
       charges: 0,
