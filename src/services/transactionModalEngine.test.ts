@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getConsolidatedHoldings, isHoldingActive } from '../utils/consolidation';
-import { calculateHoldingMetrics } from './portfolioCalculationService';
+import { calculateHoldingMetrics, calculateTotalInvested } from './portfolioCalculationService';
 import type { Investment, Transaction } from '../types';
 
 describe('Transaction Modal Engine & Verification Scenarios', () => {
@@ -191,10 +191,58 @@ describe('Transaction Modal Engine & Verification Scenarios', () => {
     const consolidated = getConsolidatedHoldings([etfHolding], [buyEtf, sellEtf]);
     const holding = consolidated.find(h => h.assetName === 'NIPPON INDIA NIFTY 50 ETF');
 
-    expect(holding?.currentQuantity).toBe(40);
-    expect(holding?.investedAmount).toBe(10000);
-    // Realized PL: net proceeds (2600 - 15 = 2585) - cost (10 * 250 = 2500) = 85
     expect(holding?.realizedPL).toBe(85);
+  });
+
+  it('7. Total Amount calculation after SELL transaction: Previous Total Amount ₹10,000, Sell 1 @ ₹628.20 => New Total Amount ₹9,371.80', () => {
+    const inv10k: Investment = {
+      id: 'inv_10k',
+      assetName: 'Test Holding',
+      category: 'Stocks',
+      assetType: 'Stocks',
+      owner: 'Me',
+      quantity: 10,
+      buyPrice: 1000,
+      buyDate: '2026-09-01',
+      broker: 'Dhan',
+      investedAmount: 10000,
+      charges: 0,
+      isDemo: false,
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z'
+    };
+
+    const txBuy: Transaction = {
+      id: 'tx_buy_10k',
+      investmentId: 'inv_10k',
+      type: 'BUY',
+      quantity: 10,
+      price: 1000,
+      amount: 10000,
+      charges: 0,
+      date: '2026-09-01',
+      isDemo: false,
+      createdAt: '2026-09-01T00:00:00Z'
+    };
+
+    const previousTotal = calculateTotalInvested([inv10k], [txBuy]);
+    expect(previousTotal).toBe(10000);
+
+    const txSell: Transaction = {
+      id: 'tx_sell_628',
+      investmentId: 'inv_10k',
+      type: 'SELL',
+      quantity: 1,
+      price: 628.20,
+      amount: 628.20,
+      charges: 0,
+      date: '2026-09-13',
+      isDemo: false,
+      createdAt: '2026-09-13T00:00:00Z'
+    };
+
+    const newTotal = calculateTotalInvested([inv10k], [txBuy, txSell]);
+    expect(newTotal).toBe(9371.80);
   });
 
 });

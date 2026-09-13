@@ -1660,14 +1660,13 @@ describe('Portfolio Calculation Service Unit Tests', () => {
     ];
     expect(calculateTotalInvested([stock], txBuyOnly)).toBe(10100);
 
-    // B. BUY + SELL:
-    // BUY ₹10,000 -> SELL ₹4,000 -> Total invested = ₹10,000 (with no charges in this check to keep it simple)
+    // BUY ₹10,000 -> SELL ₹4,000 -> Total invested = ₹6,000
     const stockB: Investment = { ...stock, charges: 0 };
     const txBuySell: Transaction[] = [
       { id: 'tx-buy-2', investmentId: 'stock-test', type: 'BUY', quantity: 10, price: 1000, amount: 10000, charges: 0, date: '2026-08-10', isDemo: false, createdAt: '' },
       { id: 'tx-sell-2', investmentId: 'stock-test', type: 'SELL', quantity: 4, price: 1000, amount: 4000, charges: 0, date: '2026-08-15', isDemo: false, createdAt: '' }
     ];
-    expect(calculateTotalInvested([stockB], txBuySell)).toBe(10000);
+    expect(calculateTotalInvested([stockB], txBuySell)).toBe(6000);
 
     // C. BUY + SPLIT:
     // BUY ₹10,000 -> SPLIT 1:2 -> Total invested = ₹10,000
@@ -1854,13 +1853,13 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       expect(calculateTotalInvested([inv], txs)).toBe(1000);
     });
 
-    test('5. SELL does not decrease Total Invested', () => {
+    test('5. SELL decreases Total Invested', () => {
       const inv = getBaseStock();
       const txs: Transaction[] = [
         { id: 'tx1', investmentId: inv.id, type: 'BUY', quantity: 10, price: 100, amount: 1000, charges: 0, date: '2026-08-10', isDemo: false, createdAt: '' },
         { id: 'tx2', investmentId: inv.id, type: 'SELL', quantity: 5, price: 150, amount: 750, charges: 0, date: '2026-08-15', isDemo: false, createdAt: '' }
       ];
-      expect(calculateTotalInvested([inv], txs)).toBe(1000);
+      expect(calculateTotalInvested([inv], txs)).toBe(250);
     });
 
     test('6. Partial SELL calculates cost basis of remaining shares correctly', () => {
@@ -1874,7 +1873,7 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       expect(calculateRealizedProfitLoss(inv, txs)).toBe(200); // 4 * (150 - 100) = 200
     });
 
-    test('7. Complete SELL sets quantity to 0 and does not reduce Total Invested', () => {
+    test('7. Complete SELL sets quantity to 0 and reduces Total Invested', () => {
       const inv = getBaseStock();
       const txs: Transaction[] = [
         { id: 'tx1', investmentId: inv.id, type: 'BUY', quantity: 10, price: 100, amount: 1000, charges: 0, date: '2026-08-10', isDemo: false, createdAt: '' },
@@ -1882,7 +1881,7 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       ];
       const metrics = calculateHoldingMetrics(inv, txs, {});
       expect(metrics.quantity).toBe(0);
-      expect(calculateTotalInvested([inv], txs)).toBe(1000);
+      expect(calculateTotalInvested([inv], txs)).toBe(0);
     });
 
     test('8. Stock split preserves total cost basis and adjusts average price', () => {
@@ -2202,14 +2201,14 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       expect(calculateTotalInvested([inv], txs)).toBe(500);
     });
 
-    // TEST 3: BUY ₹1,000, SELL ₹1,500 → Total invested still = ₹1,000
-    test('TEST 3: BUY ₹1000 then SELL → Total invested = ₹1000 (not reduced by SELL)', () => {
+    // TEST 3: BUY ₹1,000, SELL ₹750 → Total invested = ₹250
+    test('TEST 3: BUY ₹1000 then SELL → Total invested reduces by sold amount', () => {
       const inv = makeStock({ id: 'test-3' });
       const txs: Transaction[] = [
         makeTx({ id: 'tx1', investmentId: 'test-3', type: 'BUY', quantity: 10, price: 100, amount: 1000, charges: 0, date: '2026-01-10' }),
         makeTx({ id: 'tx2', investmentId: 'test-3', type: 'SELL', quantity: 5, price: 150, amount: 750, charges: 0, date: '2026-01-20' }),
       ];
-      expect(calculateTotalInvested([inv], txs)).toBe(1000);
+      expect(calculateTotalInvested([inv], txs)).toBe(250);
     });
 
     // TEST 4: BUY ₹1,000, STOCK SPLIT → invested = ₹1,000
@@ -2614,10 +2613,9 @@ describe('Portfolio Calculation Service Unit Tests', () => {
       // July: 500 only
       expect(julyMonthly).toBe(500);
 
-      // Total invested = all BUY txs across all months (stock + mf)
-      // Stock: 825.76 + 100 + 500 = 1425.76, MF: 500 → total = 1925.76
+      // Total invested = all BUY txs minus SELL txs (825.76 + 100 + 500 + 500 - 240 = 1685.76)
       const totalInvested = calculateTotalInvested([stock, mf], txs);
-      expect(totalInvested).toBe(safeRound(825.76 + 100 + 500 + 500));
+      expect(totalInvested).toBe(safeRound(825.76 + 100 + 500 + 500 - 240));
     });
   });
 });

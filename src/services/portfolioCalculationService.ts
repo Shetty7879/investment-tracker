@@ -695,6 +695,10 @@ export const calculateTotalInvested = (
       }
     }
 
+    const sellTxs = invTxs.filter(tx => tx.type === 'SELL');
+    const soldAmount = sellTxs.reduce((sum, tx) => sum + (tx.quantity * tx.price), 0);
+    contribution = Math.max(0, contribution - soldAmount);
+
     total += contribution;
   });
 
@@ -718,6 +722,7 @@ export const calculateTotalInvestedByPlatform = (
   realInvs.forEach(inv => {
     const invTxs = realTxs.filter(tx => tx.investmentId === inv.id);
     const buyTxs = invTxs.filter(tx => tx.type === 'BUY');
+    const sellTxs = invTxs.filter(tx => tx.type === 'SELL');
     const category = inv.category || inv.assetType || 'Stocks';
     const broker = (inv.broker === 'Other' ? (inv.customBroker || 'Other') : (inv.broker || 'Other')) || 'Other';
 
@@ -759,6 +764,9 @@ export const calculateTotalInvestedByPlatform = (
         contribution = qty * price + (inv.charges ?? 0);
       }
     }
+
+    const soldAmount = sellTxs.reduce((sum, tx) => sum + (tx.quantity * tx.price), 0);
+    contribution = Math.max(0, contribution - soldAmount);
 
     platformMap[broker] = (platformMap[broker] || 0) + contribution;
   });
