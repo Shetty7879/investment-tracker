@@ -274,7 +274,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <label className="block text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1">
                 {quantityLabel} <span className="text-rose-500">*</span>
               </label>
-              <div className="flex items-center gap-1.5 w-full">
+              <div className="flex items-center gap-2.5 w-full">
                 <button
                   type="button"
                   onClick={() => {
@@ -286,9 +286,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   }}
                   disabled={(parseFloat(quantity) || 1) <= 1}
                   aria-label={`Decrease ${quantityLabel.toLowerCase()}`}
-                  className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer"
+                  className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-xs"
                 >
-                  <Minus className="h-3.5 w-3.5" />
+                  <Minus className="h-4 w-4" />
                 </button>
 
                 <input
@@ -300,7 +300,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   placeholder="1"
                   value={quantity}
                   onChange={(e) => handleQuantityChange(e.target.value)}
-                  className="w-full text-center px-2 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-extrabold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17]"
+                  className="w-full min-w-[75px] text-center px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 text-sm font-extrabold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-900 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
                 />
 
                 <button
@@ -319,9 +319,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     (parseFloat(quantity) || 0) >= availableQty
                   }
                   aria-label={`Increase ${quantityLabel.toLowerCase()}`}
-                  className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer"
+                  className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-xs"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -341,7 +341,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 placeholder="0.00"
                 value={price}
                 onChange={(e) => handlePriceChange(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17]"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
 
@@ -356,7 +356,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-extrabold outline-none focus:border-indigo-500 text-indigo-650 dark:text-indigo-400 dark:bg-[#0d0f17]"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-extrabold outline-none focus:border-indigo-500 text-indigo-650 dark:text-indigo-400 dark:bg-[#0d0f17] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
           </div>
@@ -373,7 +373,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 min="0"
                 value={charges}
                 onChange={(e) => setCharges(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17]"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent text-xs font-bold outline-none focus:border-indigo-500 text-slate-900 dark:text-white dark:bg-[#0d0f17] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
 
