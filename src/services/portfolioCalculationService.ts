@@ -278,7 +278,7 @@ export const calculateHoldingMetrics = (
   });
 
   const explicitBuyTxs = allTxs.filter(tx => tx.investmentId === inv.id && tx.type === 'BUY' && !tx.id.startsWith('fallback-tx'));
-  if (totalInvestedCost === 0 && explicitBuyTxs.length === 0 && inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+  if (currentQuantity > 0 && totalInvestedCost === 0 && explicitBuyTxs.length === 0 && inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
     const parsed = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
     if (!isNaN(parsed) && isFinite(parsed)) {
       totalInvestedCost = parsed;
@@ -316,6 +316,7 @@ export const calculateHoldingMetrics = (
 
       if (status === 'Sold') {
         currentQuantity = 0;
+        totalInvestedCost = 0;
       } else {
         currentQuantity = allottedQty;
       }
