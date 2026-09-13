@@ -97,14 +97,14 @@ export const Dashboard: React.FC = () => {
   const numberOfInvestments = holdings.filter(isHoldingActive).length;
 
   // AUTHORITATIVE total invested — single source of truth
-  const totalInvestedAmount = calculateTotalInvested(filteredInvs, filteredTxs);
+  const totalInvestedAmount = useMemo(() => {
+    return calculateTotalInvested(filteredInvs, filteredTxs, marketPrices);
+  }, [filteredInvs, filteredTxs, marketPrices]);
 
   // Monthly Invested Calculation — same authoritative engine
   const currentYear = new Date().getFullYear();
   const currentMonthIdx = new Date().getMonth();
   const monthlyInvestedAmount = calculateMonthlyInvested(filteredTxs, filteredInvs, currentYear, currentMonthIdx);
-
-
 
   // Filter and sort for Recent Investments (top 5 sorted by buy date / purchase date)
   const recentInvestments = [...holdings]
@@ -154,7 +154,9 @@ export const Dashboard: React.FC = () => {
 
   // Group investments by platform using the canonical calculation engine
   // This guarantees: sum of platform totals === totalInvestedAmount
-  const platformTotalsMap = calculateTotalInvestedByPlatform(filteredInvs, filteredTxs);
+  const platformTotalsMap = useMemo(() => {
+    return calculateTotalInvestedByPlatform(filteredInvs, filteredTxs, marketPrices);
+  }, [filteredInvs, filteredTxs, marketPrices]);
 
   const platformInvestments = Object.entries(platformTotalsMap)
     .map(([name, amount]) => ({ name, amount }))

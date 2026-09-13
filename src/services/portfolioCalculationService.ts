@@ -641,14 +641,15 @@ export const getEffectiveTransactionCost = (tx: Transaction, inv: Investment): n
  */
 export const calculateTotalInvested = (
   investments: Investment[],
-  transactions: Transaction[]
+  transactions: Transaction[],
+  marketPrices: Record<string, any> = {}
 ): number => {
-  const consolidated = getConsolidatedHoldings(investments, transactions);
+  const consolidated = getConsolidatedHoldings(investments, transactions, marketPrices);
   let total = 0;
 
   consolidated.forEach(h => {
     if (!h.isDemo && isHoldingActive(h)) {
-      total += h.investedAmount;
+      total += (h.investedAmount || 0);
     }
   });
 
@@ -661,15 +662,16 @@ export const calculateTotalInvested = (
  */
 export const calculateTotalInvestedByPlatform = (
   investments: Investment[],
-  transactions: Transaction[]
+  transactions: Transaction[],
+  marketPrices: Record<string, any> = {}
 ): Record<string, number> => {
-  const consolidated = getConsolidatedHoldings(investments, transactions);
+  const consolidated = getConsolidatedHoldings(investments, transactions, marketPrices);
   const platformMap: Record<string, number> = {};
 
   consolidated.forEach(h => {
     if (!h.isDemo && isHoldingActive(h)) {
       const broker = h.broker || 'Other';
-      platformMap[broker] = (platformMap[broker] || 0) + h.investedAmount;
+      platformMap[broker] = (platformMap[broker] || 0) + (h.investedAmount || 0);
     }
   });
 
