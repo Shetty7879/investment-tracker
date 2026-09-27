@@ -21,6 +21,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { PlatformBadge } from '../components/PlatformBadge';
+import { AssetLogo } from '../components/AssetLogo';
 import { getAssetTypeBadgeStyle } from '../utils/badgeStyles';
 import { InlineDisclosureMenu } from '../components/ui/inline-disclosure-menu';
 import { ContinuousPagination } from '../components/ui/continuous-pagination';
@@ -397,14 +398,27 @@ export const Investments: React.FC = () => {
                       ];
                       return (
                         <tr key={holding.holdingKey} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/15 transition-colors">
-                          <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-white max-w-[200px] overflow-hidden text-ellipsis" title={holding.assetName}>
-                            <div className="flex items-center gap-1.5">
-                              <span>{holding.assetName}</span>
-                              {badgeInfo.isStatusVisible && (
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeInfo.colorClass}`}>
-                                  {badgeInfo.label.toUpperCase()}
-                                </span>
-                              )}
+                          <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-white max-w-[220px] overflow-hidden text-ellipsis" title={holding.assetName}>
+                            <div className="flex items-center gap-2.5">
+                              <AssetLogo
+                                asset={holding}
+                                size="sm"
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="truncate">{holding.assetName}</span>
+                                  {badgeInfo.isStatusVisible && (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${badgeInfo.colorClass}`}>
+                                      {badgeInfo.label.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                {holding.symbol && (
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-normal">
+                                    {holding.symbol}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-3.5 text-slate-600 dark:text-slate-400">{holding.category}</td>
@@ -445,11 +459,17 @@ export const Investments: React.FC = () => {
                 return (
                   <div key={holding.holdingKey} className="bg-white dark:bg-[#0d0f17] border border-slate-200 dark:border-slate-855 rounded-2xl p-4 space-y-3.5 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h4 className="font-bold text-slate-900 dark:text-white text-sm m-0 line-clamp-1">{holding.assetName}</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getAssetTypeBadgeStyle(holding.displayType)}`}>{holding.displayType}</span>
-                          <PlatformBadge name={holding.broker} />
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <AssetLogo
+                          asset={holding}
+                          size="sm"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm m-0 line-clamp-1">{holding.assetName}</h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${getAssetTypeBadgeStyle(holding.displayType)}`}>{holding.displayType}</span>
+                            <PlatformBadge name={holding.broker} />
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">

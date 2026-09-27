@@ -5,6 +5,7 @@ import type { ConsolidatedHolding } from '../utils/consolidation';
 import { X, Trash2, Calendar, ArrowLeft, ChevronRight, FileText, Tag, DollarSign, Layers } from 'lucide-react';
 import { PlatformBadge } from './PlatformBadge';
 import { ContinuousPagination } from './ui/continuous-pagination';
+import { AssetLogo } from './AssetLogo';
 
 interface TransactionsDrawerProps {
   isOpen: boolean;
@@ -134,7 +135,16 @@ export const TransactionsDrawer: React.FC<TransactionsDrawerProps> = ({
         ) : (
           <div className="flex items-start justify-between border-b border-slate-150 dark:border-slate-855 pb-4 shrink-0">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
+                <AssetLogo
+                  name={holding.assetName}
+                  symbol={holding.symbol}
+                  isin={holding.isin}
+                  exchange={holding.exchange}
+                  assetType={holding.displayType}
+                  logoUrl={holding.logoUrl}
+                  size="sm"
+                />
                 <h3 className="text-base font-extrabold text-slate-900 dark:text-white m-0">
                   Transaction History — {holding.assetName}
                 </h3>

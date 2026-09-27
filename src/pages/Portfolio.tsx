@@ -12,6 +12,7 @@ import { InvestmentModal } from '../components/InvestmentModal';
 import { SplitModal } from '../components/SplitModal';
 import { DividendModal } from '../components/DividendModal';
 import { PlatformBadge } from '../components/PlatformBadge';
+import { AssetLogo } from '../components/AssetLogo';
 import { InlineDisclosureMenu } from '../components/ui/inline-disclosure-menu';
 import { ContinuousPagination } from '../components/ui/continuous-pagination';
 import { calculateHoldingDividends } from '../utils/calculations';
@@ -462,14 +463,27 @@ export const Portfolio: React.FC = () => {
                           ];
                           return (
                             <tr key={holding.holdingKey} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/15 transition-colors">
-                              <td className="px-4 py-3 font-bold text-slate-900 dark:text-white max-w-[200px] truncate" title={holding.assetName}>
-                                <div className="flex items-center gap-1.5">
-                                  <span>{holding.assetName}</span>
-                                  {badgeInfo.isStatusVisible && (
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeInfo.colorClass}`}>
-                                      {badgeInfo.label.toUpperCase()}
-                                    </span>
-                                  )}
+                              <td className="px-4 py-3 font-bold text-slate-900 dark:text-white max-w-[220px] truncate" title={holding.assetName}>
+                                <div className="flex items-center gap-2.5">
+                                  <AssetLogo
+                                    asset={holding}
+                                    size="sm"
+                                  />
+                                  <div className="flex flex-col min-w-0">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      <span className="truncate">{holding.assetName}</span>
+                                      {badgeInfo.isStatusVisible && (
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${badgeInfo.colorClass}`}>
+                                          {badgeInfo.label.toUpperCase()}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {holding.symbol && (
+                                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-normal">
+                                        {holding.symbol}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-3 py-3 text-slate-600 dark:text-slate-400">{holding.category}</td>
@@ -521,13 +535,19 @@ export const Portfolio: React.FC = () => {
                         className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 space-y-2.5 font-semibold text-[11px]"
                       >
                         <div className="flex justify-between items-start gap-4">
-                          <div className="min-w-0 flex-1">
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate" title={holding.assetName}>
-                              {holding.assetName}
-                            </h4>
-                            <span className="text-[10px] text-slate-400">
-                              {holding.txCount} transaction{holding.txCount !== 1 ? 's' : ''}
-                            </span>
+                          <div className="min-w-0 flex-1 flex items-center gap-2.5">
+                            <AssetLogo
+                              asset={holding}
+                              size="sm"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white m-0 truncate" title={holding.assetName}>
+                                {holding.assetName}
+                              </h4>
+                              <span className="text-[10px] text-slate-400">
+                                {holding.txCount} transaction{holding.txCount !== 1 ? 's' : ''}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-105 dark:border-slate-800 text-[10px]">
@@ -608,7 +628,15 @@ export const Portfolio: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-150 dark:border-slate-855 pb-4">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 dark:text-white m-0 flex items-center gap-2">
-                      <History className="h-5 w-5 text-indigo-500" />
+                      <AssetLogo
+                        name={selectedHolding.assetName}
+                        symbol={selectedHolding.symbol}
+                        isin={selectedHolding.isin}
+                        exchange={selectedHolding.exchange}
+                        assetType={selectedHolding.displayType}
+                        logoUrl={selectedHolding.logoUrl}
+                        size="sm"
+                      />
                       <span>Transaction Activity Log</span>
                       <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
                         — {selectedHolding.assetName}

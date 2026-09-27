@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { storage } from '../utils/localStorage';
-import type { Investment, Goal, Transaction, MoneyRecord, Dividend, ReinvestOptions } from '../types';
+import type { Investment, Goal, Transaction, MoneyRecord, Dividend, DividendStatus, ReinvestOptions } from '../types';
 import {
   DEFAULT_INVESTMENTS,
   DEFAULT_GOALS,
@@ -15,6 +15,7 @@ import {
   saveFridayTrackData,
   migrateLocalStorageToSupabase
 } from '../services/fridaytrackDataService';
+import { discoverDividendsForHoldings } from '../services/dividendService';
 import type { ProfileData as UserProfile } from '../components/ui/edit-profile';
 import { AppContext } from './AppContext';
 import type { ToastData, OwnerFilterType, DataTypeFilterType } from './AppContext';
@@ -104,6 +105,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setTransactions(updatedCloud.transactions);
           setGoals(updatedCloud.goals);
           setMoneyRecords(updatedCloud.money_records);
+          if (updatedCloud.dividends) {
+            setDividends(updatedCloud.dividends);
+          }
           if (updatedCloud.updated_at) {
             setLastSyncedAt(updatedCloud.updated_at);
           }
@@ -149,7 +153,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     nextTxs: Transaction[],
     nextGoals: Goal[],
     nextMoney: MoneyRecord[],
-    profileOverride?: UserProfile
+    profileOverride?: UserProfile,
+    nextDividends?: Dividend[]
   ): Promise<boolean> => {
     try {
       const success = await saveFridayTrackData({
@@ -157,6 +162,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transactions: nextTxs,
         goals: nextGoals,
         money_records: nextMoney,
+        dividends: nextDividends !== undefined ? nextDividends : dividends,
         preferences: {
           theme,
           currency,
@@ -204,6 +210,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setTransactions(cloudData.transactions);
           setGoals(cloudData.goals);
           setMoneyRecords(cloudData.money_records);
+          if (cloudData.dividends) {
+            setDividends(cloudData.dividends);
+          }
 
           if (cloudData.preferences) {
             const prefs = cloudData.preferences;
@@ -230,7 +239,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const localTxs = storage.get<Transaction[]>('transactions', []).filter(t => !t.isDemo);
           const localGoals = storage.get<Goal[]>('goals', []).filter(g => !g.isDemo);
           const localMoneyRaw = storage.get<any[]>('moneyTracker', []) || storage.get<any[]>('money_records', []);
-          const hasLocalRealData = localInvs.length > 0 || localTxs.length > 0 || localGoals.length > 0 || localMoneyRaw.some(m => !m.isDemo);
+          const localDividends = storage.get<Dividend[]>('fridaytrack_dividends', []).filter(d => !d.isDemo);
+          const hasLocalRealData = localInvs.length > 0 || localTxs.length > 0 || localGoals.length > 0 || localMoneyRaw.some(m => !m.isDemo) || localDividends.length > 0;
 
           if (hasLocalRealData) {
             showToast('Syncing local data with cloud...', 'info');
@@ -243,6 +253,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setTransactions(updatedCloud.transactions);
                 setGoals(updatedCloud.goals);
                 setMoneyRecords(updatedCloud.money_records);
+                if (updatedCloud.dividends) {
+                  setDividends(updatedCloud.dividends);
+                }
               }
             } else {
               showToast(`Local sync warning: ${migrationResult.message}`, 'warning');
@@ -707,6 +720,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: nowStr
     };
 
+    let nextTxs = transactions;
+    let nextInvs = investments;
+
     if (reinvestOptions?.reinvest && reinvestOptions.price && reinvestOptions.price > 0) {
       const parentInv = investments.find(i => i.id === divData.investmentId);
       if (parentInv) {
@@ -733,8 +749,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: nowStr
         };
 
-        const nextTxs = [createdTx, ...transactions];
-        const nextInvs = investments.map(inv => {
+        nextTxs = [createdTx, ...transactions];
+        nextInvs = investments.map(inv => {
           if (inv.id === parentInv.id) {
             const parentTxs = nextTxs.filter(t => t.investmentId === inv.id);
             const metrics = calculateHoldingMetrics(inv, parentTxs, marketPrices);
@@ -758,33 +774,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    setDividends(prev => [newDividend, ...prev]);
+    const nextDividends = [newDividend, ...dividends];
+    setDividends(nextDividends);
+    syncWithCloud(nextInvs, nextTxs, goals, moneyRecords, undefined, nextDividends);
     showToast('Dividend recorded successfully!', 'success');
   };
 
   const updateDividend = (updatedDiv: Dividend) => {
-    setDividends(prev => prev.map(d => d.id === updatedDiv.id ? { ...updatedDiv, updatedAt: new Date().toISOString() } : d));
+    const nextDividends = dividends.map(d => d.id === updatedDiv.id ? { ...updatedDiv, updatedAt: new Date().toISOString() } : d);
+    setDividends(nextDividends);
+    syncWithCloud(investments, transactions, goals, moneyRecords, undefined, nextDividends);
     showToast('Dividend record updated!', 'success');
   };
 
   const deleteDividend = (id: string) => {
-    setDividends(prev => prev.filter(d => d.id !== id));
+    const nextDividends = dividends.filter(d => d.id !== id);
+    setDividends(nextDividends);
+    syncWithCloud(investments, transactions, goals, moneyRecords, undefined, nextDividends);
     showToast('Dividend record deleted.', 'info');
   };
 
   const markDividendPaid = (id: string) => {
-    setDividends(prev => prev.map(d => {
+    const nextDividends = dividends.map(d => {
       if (d.id === id) {
         return {
           ...d,
-          status: 'Paid',
+          status: 'Paid' as DividendStatus,
           paymentDate: d.paymentDate || new Date().toISOString().split('T')[0],
           updatedAt: new Date().toISOString()
         };
       }
       return d;
-    }));
+    });
+    setDividends(nextDividends);
+    syncWithCloud(investments, transactions, goals, moneyRecords, undefined, nextDividends);
     showToast('Dividend marked as Paid!', 'success');
+  };
+
+  const [isRefreshingDividends, setIsRefreshingDividends] = useState(false);
+
+  const refreshDividendData = async () => {
+    if (isRefreshingDividends) return;
+    setIsRefreshingDividends(true);
+    try {
+      const result = await discoverDividendsForHoldings(investments, transactions, dividends);
+      setDividends(result.updatedDividends);
+      await syncWithCloud(investments, transactions, goals, moneyRecords, undefined, result.updatedDividends);
+      if (result.newCount > 0 || result.updatedCount > 0) {
+        showToast(result.statusMessage, 'success');
+      } else {
+        showToast(result.statusMessage, 'info');
+      }
+    } catch (err) {
+      console.error('refreshDividendData error:', err);
+      showToast('Unable to update dividend data automatically. Your recorded dividends are intact.', 'warning');
+    } finally {
+      setIsRefreshingDividends(false);
+    }
   };
 
 
@@ -954,12 +1000,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Clear Database (Syncs empty state to Supabase)
   const clearAllData = async () => {
     if (window.confirm('Wipe all cloud and local data permanently?')) {
-      const success = await syncWithCloud([], [], [], []);
+      const success = await syncWithCloud([], [], [], [], undefined, []);
       if (success) {
         setInvestments([]);
         setTransactions([]);
         setGoals([]);
         setMoneyRecords([]);
+        setDividends([]);
         
         // Remove backups/caches
         storage.remove('investments');
@@ -967,6 +1014,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         storage.remove('goals');
         storage.remove('money_records');
         storage.remove('moneyTracker');
+        storage.remove('fridaytrack_dividends');
         
         showToast('All database and local data deleted.', 'warning');
         navigateTo('dashboard');
@@ -982,6 +1030,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transactions,
         goals,
         moneyRecords,
+        dividends,
         preferences: {
           theme,
           currency,
@@ -1020,13 +1069,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const newTxs = parsed.transactions || [];
         const newGoals = parsed.goals || [];
         const newMoneyRecords = migrateMoneyRecords(parsed.moneyRecords || []);
+        const newDividends = parsed.dividends || [];
 
-        syncWithCloud(newInvs, newTxs, newGoals, newMoneyRecords).then(success => {
+        syncWithCloud(newInvs, newTxs, newGoals, newMoneyRecords, undefined, newDividends).then(success => {
           if (success) {
             setInvestments(newInvs);
             setTransactions(newTxs);
             setGoals(newGoals);
             setMoneyRecords(newMoneyRecords);
+            setDividends(newDividends);
 
             if (parsed.preferences) {
               const prefs = parsed.preferences;
@@ -1218,6 +1269,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateDividend,
         deleteDividend,
         markDividendPaid,
+        refreshDividendData,
+        isRefreshingDividends,
         resetData,
         loadDemoData,
         clearDemoData,

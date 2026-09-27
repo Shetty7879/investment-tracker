@@ -5,6 +5,7 @@ import type { ConsolidatedHolding } from '../utils/consolidation';
 import { X, Plus, Minus, AlertCircle } from 'lucide-react';
 import type { Transaction } from '../types';
 import { DatePickerField } from './calendar-9';
+import { AssetLogo } from './AssetLogo';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -189,8 +190,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-slate-150 dark:border-slate-855 pb-3.5">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-base">💼</span>
+            <div className="flex items-center gap-2.5">
+              <AssetLogo
+                name={holding.assetName}
+                symbol={holding.symbol}
+                isin={holding.isin}
+                exchange={holding.exchange}
+                assetType={holding.displayType}
+                logoUrl={holding.logoUrl}
+                size="sm"
+              />
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white m-0">
                 {holding.assetName}
               </h3>

@@ -2,6 +2,7 @@ import { calculateHoldingMetrics, isCommodityCategory, getEffectiveTransactions 
 import type { HoldingMetrics } from '../services/portfolioCalculationService';
 import type { Investment, Transaction } from '../types';
 import { getInvestmentAge } from './calculations';
+import { findSecurityMetadata } from './logoResolver';
 
 export interface ConsolidatedHolding {
   holdingKey: string;
@@ -11,6 +12,9 @@ export interface ConsolidatedHolding {
   transactions: Transaction[];
   assetName: string;
   symbol?: string;
+  isin?: string;
+  exchange?: string;
+  logoUrl?: string;
   category: string; // Normalized category
   displayType: string;
   broker: string;
@@ -355,6 +359,8 @@ export const getConsolidatedHoldings = (
     const displayType = REVERSE_TYPE_MAPPING[category] || REVERSE_TYPE_MAPPING[primaryInv.assetType] || 'Other';
     const broker = (primaryInv.broker === 'Other' && primaryInv.customBroker ? primaryInv.customBroker : (primaryInv.broker || 'Other')).trim();
 
+    const meta = findSecurityMetadata(primaryInv.assetName, primaryInv.symbol, primaryInv.isin);
+
     results.push({
       holdingKey,
       id: primaryInv.id,
@@ -362,7 +368,10 @@ export const getConsolidatedHoldings = (
       investments: groupInvs,
       transactions: groupTxs,
       assetName: primaryInv.assetName,
-      symbol: primaryInv.symbol,
+      symbol: primaryInv.symbol || groupInvs.find(i => i.symbol)?.symbol || meta.symbol,
+      isin: primaryInv.isin || groupInvs.find(i => i.isin)?.isin || meta.isin,
+      exchange: primaryInv.exchange || groupInvs.find(i => i.exchange)?.exchange || meta.exchange,
+      logoUrl: primaryInv.logoUrl || primaryInv.logo_url || groupInvs.find(i => i.logoUrl || i.logo_url)?.logoUrl,
       category,
       displayType,
       broker,

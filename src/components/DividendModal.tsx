@@ -4,6 +4,7 @@ import type { Dividend, DividendStatus, BrokerType } from '../types';
 import { X, DollarSign, Calculator, RefreshCw, Search, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { DatePickerField, formatYMDDate } from './calendar-9';
 import { Stepper } from './stepper';
+import { AssetLogo } from './AssetLogo';
 
 interface DividendModalProps {
   isOpen: boolean;
@@ -29,9 +30,10 @@ export const DividendModal: React.FC<DividendModalProps> = ({
   const [tax, setTax] = useState<string>('0');
   const [dividendDate, setDividendDate] = useState<string>(formatYMDDate(new Date()));
   const [paymentDate, setPaymentDate] = useState<string>(formatYMDDate(new Date()));
-  const [status, setStatus] = useState<DividendStatus>('Paid');
+  const [status, setStatus] = useState<DividendStatus>('RECEIVED');
+  const [source, setSource] = useState<'Manual' | 'Official' | 'NSE/BSE' | 'Market Data'>('Manual');
   const [notes, setNotes] = useState<string>('');
-  
+
   // Reinvestment options
   const [reinvest, setReinvest] = useState<boolean>(false);
   const [reinvestPrice, setReinvestPrice] = useState<string>('');
@@ -112,7 +114,8 @@ export const DividendModal: React.FC<DividendModalProps> = ({
       setTax(dividendToEdit.tax?.toString() || '0');
       setDividendDate(dividendToEdit.dividendDate || formatYMDDate(new Date()));
       setPaymentDate(dividendToEdit.paymentDate || formatYMDDate(new Date()));
-      setStatus(dividendToEdit.status || 'Paid');
+      setStatus(dividendToEdit.status || 'RECEIVED');
+      setSource((dividendToEdit.source as any) || 'Manual');
       setNotes(dividendToEdit.notes || '');
       setReinvest(dividendToEdit.reinvested || false);
       setReinvestPrice('');
@@ -130,7 +133,8 @@ export const DividendModal: React.FC<DividendModalProps> = ({
       setTax('0');
       setDividendDate(formatYMDDate(new Date()));
       setPaymentDate(formatYMDDate(new Date()));
-      setStatus('Paid');
+      setStatus('RECEIVED');
+      setSource('Manual');
       setNotes('');
       setReinvest(false);
       setReinvestPrice('');
@@ -178,17 +182,29 @@ export const DividendModal: React.FC<DividendModalProps> = ({
 
     const payload: Omit<Dividend, 'id' | 'createdAt'> = {
       investmentId,
+      asset_id: investmentId,
       symbol,
       assetName,
+      asset_name: assetName,
       broker,
+      platform: broker,
       eligibleQuantity,
+      quantity: eligibleQuantity,
       dividendPerShare: perShareNum,
+      dividend_per_share: perShareNum,
       grossDividend,
+      gross_amount: grossDividend,
       tax: taxNum,
+      tds_amount: taxNum,
       netDividend,
+      net_amount: netDividend,
       dividendDate,
+      ex_date: dividendDate,
       paymentDate: paymentDate || dividendDate,
+      payment_date: paymentDate || dividendDate,
       status: reinvest ? 'Reinvested' : status,
+      source: source,
+      verified: source === 'Official' || source === 'NSE/BSE' || source === 'Market Data',
       notes: notes.trim(),
       isDemo: dividendToEdit ? !!dividendToEdit.isDemo : false
     };
@@ -262,6 +278,17 @@ export const DividendModal: React.FC<DividendModalProps> = ({
               } rounded-xl text-white text-sm text-left focus:outline-none disabled:opacity-60 transition-all cursor-pointer`}
             >
               <div className="flex items-center space-x-2 truncate pr-2">
+                {selectedInvestment && (
+                  <AssetLogo
+                    name={selectedInvestment.assetName}
+                    symbol={selectedInvestment.symbol}
+                    isin={selectedInvestment.isin}
+                    exchange={selectedInvestment.exchange}
+                    assetType={selectedInvestment.category || selectedInvestment.assetType}
+                    logoUrl={selectedInvestment.logoUrl || selectedInvestment.logo_url}
+                    size="xs"
+                  />
+                )}
                 <span className="truncate font-medium text-gray-100">
                   {selectedInvestment
                     ? `${selectedInvestment.assetName}${selectedInvestment.symbol ? ` (${selectedInvestment.symbol})` : ''} - ${selectedInvestment.broker || 'Broker'}`
@@ -326,19 +353,30 @@ export const DividendModal: React.FC<DividendModalProps> = ({
                             isSelected ? 'bg-emerald-500/15 text-emerald-400 font-semibold' : 'text-gray-200'
                           }`}
                         >
-                          <div className="min-w-0 pr-2">
-                            <div className="text-xs font-semibold text-white truncate flex items-center space-x-2">
-                              <span>{inv.assetName}</span>
-                              {inv.symbol && (
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">
-                                  {inv.symbol}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-gray-400 mt-0.5 flex items-center space-x-2">
-                              <span>Platform: <strong className="text-gray-300">{brokerName}</strong></span>
-                              <span>•</span>
-                              <span>Qty: <strong className="text-gray-300">{inv.quantity || 1}</strong></span>
+                          <div className="min-w-0 flex-1 flex items-center space-x-2.5 pr-2">
+                            <AssetLogo
+                              name={inv.assetName}
+                              symbol={inv.symbol}
+                              isin={inv.isin}
+                              exchange={inv.exchange}
+                              assetType={inv.category || inv.assetType}
+                              logoUrl={inv.logoUrl || inv.logo_url}
+                              size="xs"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-semibold text-white truncate flex items-center space-x-2">
+                                <span>{inv.assetName}</span>
+                                {inv.symbol && (
+                                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">
+                                    {inv.symbol}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-gray-400 mt-0.5 flex items-center space-x-2">
+                                <span>Platform: <strong className="text-gray-300">{brokerName}</strong></span>
+                                <span>•</span>
+                                <span>Qty: <strong className="text-gray-300">{inv.quantity || 1}</strong></span>
+                              </div>
                             </div>
                           </div>
 
@@ -355,8 +393,8 @@ export const DividendModal: React.FC<DividendModalProps> = ({
             )}
           </div>
 
-          {/* Platform & Status Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Platform, Source & Status Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-300 mb-1.5">
                 Platform / Broker
@@ -372,6 +410,22 @@ export const DividendModal: React.FC<DividendModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                Data Source
+              </label>
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value as any)}
+                className="w-full px-3 py-2.5 bg-[#1a2234] border border-gray-700/60 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Manual">Manual Entry</option>
+                <option value="Official">Official IR Filing</option>
+                <option value="NSE/BSE">NSE / BSE</option>
+                <option value="Market Data">Market API</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
                 Status
               </label>
               <select
@@ -380,9 +434,13 @@ export const DividendModal: React.FC<DividendModalProps> = ({
                 disabled={reinvest}
                 className="w-full px-3 py-2.5 bg-[#1a2234] border border-gray-700/60 rounded-xl text-white text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60"
               >
-                <option value="Paid">Paid (Received)</option>
-                <option value="Upcoming">Upcoming</option>
-                <option value="Declared">Declared</option>
+                <option value="RECEIVED">Received</option>
+                <option value="PAID">Paid</option>
+                <option value="UPCOMING">Upcoming</option>
+                <option value="DECLARED">Declared</option>
+                <option value="ELIGIBLE">Eligible</option>
+                <option value="PENDING">Pending</option>
+                <option value="NOT_ELIGIBLE">Not Eligible</option>
                 <option value="Reinvested">Reinvested</option>
               </select>
             </div>

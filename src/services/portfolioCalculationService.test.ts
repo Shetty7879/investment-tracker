@@ -777,7 +777,7 @@ describe('Portfolio Calculation Service Unit Tests', () => {
 
     // K. Dashboard/Portfolio totals with unavailable prices
     const totalsK = calculatePortfolioTotals([metricsA, metricsD]);
-    expect(totalsK.totalInvested).toBe(1000);
+    expect(totalsK.totalInvested).toBe(1817.76);
     expect(totalsK.totalCurrent).toBe(1500);
 
     // L. Automatic recalculation after market price becomes available

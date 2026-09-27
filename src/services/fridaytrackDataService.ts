@@ -1,12 +1,13 @@
 import { supabase } from '../utils/supabase';
 import { storage } from '../utils/localStorage';
-import type { Investment, Transaction, Goal, MoneyRecord } from '../types';
+import type { Investment, Transaction, Goal, MoneyRecord, Dividend } from '../types';
 
 export interface FridayTrackData {
   investments: Investment[];
   transactions: Transaction[];
   goals: Goal[];
   money_records: MoneyRecord[];
+  dividends?: Dividend[];
   preferences: Record<string, any>;
   updated_at?: string;
 }
@@ -47,11 +48,18 @@ export const loadFridayTrackData = async (): Promise<FridayTrackData | null> => 
 
     if (!data) return null;
 
+    const rawDividends = Array.isArray((data as any).dividends)
+      ? (data as any).dividends
+      : (data.preferences && Array.isArray((data.preferences as any).dividends)
+          ? (data.preferences as any).dividends
+          : []);
+
     return {
       investments: Array.isArray(data.investments) ? (data.investments as Investment[]) : [],
       transactions: Array.isArray(data.transactions) ? (data.transactions as Transaction[]) : [],
       goals: Array.isArray(data.goals) ? (data.goals as Goal[]) : [],
       money_records: Array.isArray(data.money_records) ? (data.money_records as MoneyRecord[]) : [],
+      dividends: rawDividends as Dividend[],
       preferences: data.preferences && typeof data.preferences === 'object' ? data.preferences : {},
       updated_at: data.updated_at || undefined,
     };
@@ -78,21 +86,26 @@ export const saveFridayTrackData = async (payload: FridayTrackData): Promise<boo
     const realTransactions = (payload.transactions || []).filter((t) => !t.isDemo);
     const realGoals = (payload.goals || []).filter((g) => !g.isDemo);
     const realMoneyRecords = (payload.money_records || []).filter((m) => !m.isDemo);
+    const realDividends = (payload.dividends || []).filter((d) => !d.isDemo);
+
+    const preferencesPayload = {
+      ...(payload.preferences || {}),
+      dividends: realDividends,
+    };
+
+    const upsertObject: Record<string, any> = {
+      user_id: user.id,
+      investments: realInvestments,
+      transactions: realTransactions,
+      goals: realGoals,
+      money_records: realMoneyRecords,
+      preferences: preferencesPayload,
+      updated_at: new Date().toISOString(),
+    };
 
     const { error } = await supabase
       .from('fridaytrack_data')
-      .upsert(
-        {
-          user_id: user.id,
-          investments: realInvestments,
-          transactions: realTransactions,
-          goals: realGoals,
-          money_records: realMoneyRecords,
-          preferences: payload.preferences || {},
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      );
+      .upsert(upsertObject, { onConflict: 'user_id' });
 
     if (error) {
       console.error('Error saving FridayTrack data to Supabase:', error);
@@ -117,6 +130,7 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
     transactions: number;
     goals: number;
     money_records: number;
+    dividends: number;
   };
 }> => {
   try {
@@ -125,7 +139,7 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
       return {
         success: false,
         message: 'No authenticated user found.',
-        syncedCount: { investments: 0, transactions: 0, goals: 0, money_records: 0 },
+        syncedCount: { investments: 0, transactions: 0, goals: 0, money_records: 0, dividends: 0 },
       };
     }
 
@@ -134,6 +148,7 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
     const localTxs = storage.get<Transaction[]>('transactions', []).filter((t) => !t.isDemo);
     const localGoals = storage.get<Goal[]>('goals', []).filter((g) => !g.isDemo);
     const localMoneyRaw = storage.get<any[]>('moneyTracker', []) || storage.get<any[]>('money_records', []);
+    const localDividends = storage.get<Dividend[]>('fridaytrack_dividends', []).filter((d) => !d.isDemo);
 
     // Standardize money records structure for local storage migration
     const localMoney = (localMoneyRaw || [])
@@ -163,6 +178,7 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
     const cloudTxs = cloudData?.transactions || [];
     const cloudGoals = cloudData?.goals || [];
     const cloudMoney = cloudData?.money_records || [];
+    const cloudDividends = cloudData?.dividends || [];
     const cloudPrefs = cloudData?.preferences || {};
 
     // Merge and prevent duplicates by ID
@@ -194,12 +210,20 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
       }
     });
 
+    const mergedDividends = [...cloudDividends];
+    localDividends.forEach((ld) => {
+      if (!mergedDividends.some((cd) => cd.id === ld.id)) {
+        mergedDividends.push(ld);
+      }
+    });
+
     // Save consolidated data
     const saveSuccess = await saveFridayTrackData({
       investments: mergedInvs,
       transactions: mergedTxs,
       goals: mergedGoals,
       money_records: mergedMoney,
+      dividends: mergedDividends,
       preferences: cloudPrefs,
     });
 
@@ -213,6 +237,7 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
           transactions: localTxs.length,
           goals: localGoals.length,
           money_records: localMoney.length,
+          dividends: localDividends.length,
         },
       };
     }
@@ -220,14 +245,14 @@ export const migrateLocalStorageToSupabase = async (): Promise<{
     return {
       success: false,
       message: 'Failed to write migrated data to Supabase.',
-      syncedCount: { investments: 0, transactions: 0, goals: 0, money_records: 0 },
+      syncedCount: { investments: 0, transactions: 0, goals: 0, money_records: 0, dividends: 0 },
     };
   } catch (error: any) {
     console.error('Data migration failed:', error);
     return {
       success: false,
       message: error?.message || 'An error occurred during data migration.',
-      syncedCount: { investments: 0, transactions: 0, goals: 0, money_records: 0 },
+      syncedCount: { investments: 0, transactions: 0, goals: 0, money_records: 0, dividends: 0 },
     };
   }
 };

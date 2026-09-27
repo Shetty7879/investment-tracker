@@ -2,6 +2,7 @@ import type { Investment, Transaction, Goal } from '../types';
 import type { MarketPriceData } from './marketDataService';
 import { calculateFDDetails, getMutualFundMetrics, getMutualFundTransactionMetrics } from '../utils/calculations';
 import { getConsolidatedHoldings, isHoldingActive } from '../utils/consolidation';
+import { resolveMarketSymbol } from './marketSymbolService';
 
 export interface HoldingMetrics extends Investment {
   quantity: number;
@@ -20,16 +21,28 @@ export interface HoldingMetrics extends Investment {
   priceChange?: number;
   priceChangePercent?: number;
   isValuationUnavailable?: boolean;
+  priceUnavailableReason?: string;
 }
 
 export interface PortfolioTotals {
+  valuationStatus: 'complete' | 'partial' | 'unavailable';
+  totalActiveAssets: number;
+  pricedAssetsCount: number;
+  missingPriceAssetsCount: number;
   totalInvested: number;
   totalCurrent: number;
+  pricedMarketValue: number;
+  unpricedInvestedCapital: number;
   unrealizedPL: number;
   realizedPL: number;
   totalPL: number;
   returnPercentage: number;       // Unrealized return %
   overallReturnPercentage: number; // Overall return % (Total PL / Total Invested)
+  activeHoldingsCount: number;
+  unavailablePriceCount: number;
+  hasUnavailablePrices: boolean;
+  missingAssets: HoldingMetrics[];
+  pricedAssets: HoldingMetrics[];
 }
 
 export interface GoalMetrics {
@@ -170,6 +183,361 @@ export const getEffectiveTransactions = (inv: Investment, allTxs: Transaction[])
   ];
 };
 
+export interface MarketValueResult {
+  marketValue: number | null;
+  valuationSource: string;
+  isValued: boolean;
+  reason?: string;
+  unitInGrams?: number;
+  pricePerGram?: number;
+  effectiveQuantity?: number;
+  effectivePrice?: number | null;
+}
+
+/**
+ * Normalized helper to calculate Gold / Silver / Platinum holding market value.
+ * Converts mg -> grams (grams = mg / 1000).
+ * Distinguishes price-per-gram vs total holding value.
+ */
+export const getGoldHoldingValue = (
+  inv: Investment,
+  marketPrices?: Record<string, MarketPriceData>
+): MarketValueResult & { weightGrams: number } => {
+  const unitClean = (inv.weightUnit || (inv as any).unit || '').trim().toLowerCase();
+  const rawQty = inv.weightGrams ?? inv.quantity ?? 0;
+  const isMg = unitClean === 'mg';
+  const weightGrams = isMg ? rawQty / 1000 : rawQty;
+
+  const rawSym = inv.symbol?.trim().toUpperCase();
+  const liveQuote = (rawSym && marketPrices && marketPrices[rawSym] && marketPrices[rawSym].price > 0)
+    ? marketPrices[rawSym].price
+    : null;
+
+  if (liveQuote !== null && liveQuote > 0 && weightGrams > 0) {
+    return {
+      marketValue: safeRound(weightGrams * liveQuote),
+      valuationSource: 'live_commodity_rate',
+      isValued: true,
+      weightGrams,
+      unitInGrams: weightGrams,
+      pricePerGram: liveQuote
+    };
+  }
+
+  if (inv.currentPricePerGram !== undefined && inv.currentPricePerGram !== null && inv.currentPricePerGram > 0 && weightGrams > 0) {
+    return {
+      marketValue: safeRound(weightGrams * inv.currentPricePerGram),
+      valuationSource: 'stored_price_per_gram',
+      isValued: true,
+      weightGrams,
+      unitInGrams: weightGrams,
+      pricePerGram: inv.currentPricePerGram
+    };
+  }
+
+  if (inv.currentPrice !== undefined && inv.currentPrice !== null && inv.currentPrice > 0) {
+    const invested = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any || '0');
+    const isTotalValue = isMg ||
+      (invested > 0 && Math.abs(inv.currentPrice - invested) < 1) ||
+      (weightGrams > 0 && weightGrams < 1 && inv.currentPrice < 1000);
+
+    if (isTotalValue) {
+      return {
+        marketValue: safeRound(inv.currentPrice),
+        valuationSource: 'stored_total_value',
+        isValued: true,
+        weightGrams,
+        unitInGrams: weightGrams,
+        pricePerGram: weightGrams > 0 ? safeRound(inv.currentPrice / weightGrams) : undefined
+      };
+    } else if (weightGrams > 0) {
+      return {
+        marketValue: safeRound(weightGrams * inv.currentPrice),
+        valuationSource: 'stored_price_per_gram',
+        isValued: true,
+        weightGrams,
+        unitInGrams: weightGrams,
+        pricePerGram: inv.currentPrice
+      };
+    }
+  }
+
+  if (inv.currentValue !== undefined && inv.currentValue !== null && inv.currentValue > 0) {
+    const val = typeof inv.currentValue === 'number' ? inv.currentValue : parseFloat(inv.currentValue as any);
+    if (!isNaN(val) && isFinite(val)) {
+      return {
+        marketValue: safeRound(val),
+        valuationSource: 'stored_total_value',
+        isValued: true,
+        weightGrams,
+        unitInGrams: weightGrams,
+        pricePerGram: weightGrams > 0 ? safeRound(val / weightGrams) : undefined
+      };
+    }
+  }
+
+  if (inv.buyPricePerGram !== undefined && inv.buyPricePerGram !== null && inv.buyPricePerGram > 0 && weightGrams > 0) {
+    return {
+      marketValue: safeRound(weightGrams * inv.buyPricePerGram),
+      valuationSource: 'purchase_price_per_gram',
+      isValued: true,
+      weightGrams,
+      unitInGrams: weightGrams,
+      pricePerGram: inv.buyPricePerGram
+    };
+  }
+
+  if (inv.investedAmount !== undefined && inv.investedAmount !== null && inv.investedAmount > 0) {
+    const val = typeof inv.investedAmount === 'number' ? inv.investedAmount : parseFloat(inv.investedAmount as any);
+    if (!isNaN(val) && isFinite(val)) {
+      return {
+        marketValue: safeRound(val),
+        valuationSource: 'stored_total_value',
+        isValued: true,
+        weightGrams,
+        unitInGrams: weightGrams,
+        pricePerGram: weightGrams > 0 ? safeRound(val / weightGrams) : undefined
+      };
+    }
+  }
+
+  return {
+    marketValue: null,
+    valuationSource: 'unavailable',
+    isValued: false,
+    reason: 'No valid market price or weight for commodity holding',
+    weightGrams,
+    unitInGrams: weightGrams
+  };
+};
+
+/**
+ * Single valuation engine helper for every holding.
+ * Returns marketValue, valuationSource, isValued, and optional reason.
+ */
+export const calculateHoldingMarketValue = (
+  inv: Investment,
+  allTxs: Transaction[],
+  marketPrices: Record<string, MarketPriceData>
+): MarketValueResult => {
+  const cat = (inv.category || inv.assetType || 'Stocks').trim();
+  const cleanCat = cat.toLowerCase();
+
+  // 1. COMMODITIES
+  if (isCommodityCategory(cat)) {
+    return getGoldHoldingValue(inv, marketPrices);
+  }
+
+  // Calculate effective transactions and active quantity
+  const txList = getEffectiveTransactions(inv, allTxs);
+  let currentQuantity = 0;
+  let averageBuyPrice = 0;
+  let totalInvestedCost = 0;
+
+  txList.forEach(tx => {
+    if (tx.type === 'BUY') {
+      const grossCost = cat === 'Mutual Funds' ? tx.amount : (tx.quantity * tx.price);
+      const totalCost = grossCost + tx.charges;
+      const nextQuantity = currentQuantity + tx.quantity;
+      if (nextQuantity > 0) {
+        averageBuyPrice = ((currentQuantity * averageBuyPrice) + totalCost) / nextQuantity;
+      }
+      currentQuantity = nextQuantity;
+      totalInvestedCost = currentQuantity * averageBuyPrice;
+    } else if (tx.type === 'SELL') {
+      const sellQuantity = Math.min(tx.quantity, currentQuantity);
+      if (sellQuantity > 0) {
+        currentQuantity = currentQuantity - sellQuantity;
+        totalInvestedCost = currentQuantity * averageBuyPrice;
+        if (currentQuantity === 0) averageBuyPrice = 0;
+      }
+    } else if (tx.type === 'SPLIT') {
+      const ratioParts = (tx.ratio || '1:1').split(':');
+      const oldRatio = parseFloat(ratioParts[0]) || 1;
+      const newRatio = parseFloat(ratioParts[1]) || 1;
+      if (oldRatio > 0 && newRatio > 0) {
+        currentQuantity = currentQuantity * (newRatio / oldRatio);
+        averageBuyPrice = averageBuyPrice * (oldRatio / newRatio);
+        totalInvestedCost = currentQuantity * averageBuyPrice;
+      }
+    }
+  });
+
+  if (currentQuantity <= 0 && inv.quantity && inv.quantity > 0 && txList.length === 0) {
+    currentQuantity = inv.quantity;
+  }
+
+  if (currentQuantity <= 0) {
+    return {
+      marketValue: 0,
+      valuationSource: 'zero_quantity',
+      isValued: true,
+      effectiveQuantity: 0,
+      effectivePrice: 0
+    };
+  }
+
+  // 2. MUTUAL FUNDS
+  if (cleanCat === 'mutual funds' || cleanCat === 'mutual fund' || cleanCat === 'mf') {
+    const rawSym = inv.symbol?.trim().toUpperCase();
+    const livePrice = (rawSym && marketPrices && marketPrices[rawSym] && marketPrices[rawSym].price > 0)
+      ? marketPrices[rawSym].price
+      : null;
+
+    const validNav = (inv.nav && inv.nav > 0) ? inv.nav : undefined;
+    const validBuyPrice = (inv.buyPrice && inv.buyPrice > 0) ? inv.buyPrice : undefined;
+
+    let validCurrentPrice: number | undefined = undefined;
+    if (inv.currentPrice && inv.currentPrice > 0) {
+      const isTotalValueTypo = (
+        (inv.investedAmount && Math.abs(inv.currentPrice - inv.investedAmount) < 1) ||
+        (validBuyPrice && inv.currentPrice > validBuyPrice * 3)
+      );
+      if (!isTotalValueTypo) {
+        validCurrentPrice = inv.currentPrice;
+      }
+    }
+
+    const resolvedNav = livePrice ?? validNav ?? validCurrentPrice ?? null;
+    const fallbackNav = resolvedNav ?? (validBuyPrice || (averageBuyPrice > 0 ? averageBuyPrice : (totalInvestedCost > 0 && currentQuantity > 0 ? totalInvestedCost / currentQuantity : null)));
+
+    if (fallbackNav !== null && fallbackNav > 0) {
+      const units = currentQuantity;
+      return {
+        marketValue: safeRound(units * fallbackNav),
+        valuationSource: livePrice ? 'live_nav' : (validNav ? 'nav' : 'purchase_nav_fallback'),
+        isValued: true,
+        effectiveQuantity: units,
+        effectivePrice: fallbackNav
+      };
+    }
+
+    return {
+      marketValue: null,
+      valuationSource: 'unavailable',
+      isValued: false,
+      reason: 'No valid NAV available for Mutual Fund',
+      effectiveQuantity: currentQuantity
+    };
+  }
+
+  // 3. FIXED DEPOSITS
+  if (cleanCat === 'fixed deposits' || cleanCat === 'fixed deposit' || cleanCat === 'fd') {
+    const rate = inv.interestRate ?? 0;
+    const start = inv.buyDate || inv.purchaseDate || '2026-01-01';
+    const end = inv.maturityDate || start;
+    const freq = inv.compoundingFrequency || 'Quarterly';
+    const details = calculateFDDetails(totalInvestedCost || (inv.investedAmount ?? 0), rate, start, end, freq);
+    return {
+      marketValue: safeRound(details.accruedCurrentValue),
+      valuationSource: 'fd_accrued_value',
+      isValued: true,
+      effectiveQuantity: 1,
+      effectivePrice: details.accruedCurrentValue
+    };
+  }
+
+  // 4. SAVINGS / CASH
+  if (cleanCat === 'savings/cash' || cleanCat === 'savings' || cleanCat === 'cash') {
+    const val = totalInvestedCost || (inv.investedAmount ?? currentQuantity);
+    return {
+      marketValue: safeRound(val),
+      valuationSource: 'cash_balance',
+      isValued: true,
+      effectiveQuantity: val,
+      effectivePrice: 1
+    };
+  }
+
+  // 5. IPOs
+  if (cleanCat === 'ipos' || cleanCat === 'ipo') {
+    const status = inv.ipoAllotmentStatus || 'Applied';
+    const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
+    if (!isAllotted) {
+      return {
+        marketValue: null,
+        valuationSource: 'not_allocated',
+        isValued: false,
+        reason: 'IPO not allotted',
+        effectiveQuantity: 0
+      };
+    }
+    if (status === 'Sold') {
+      return {
+        marketValue: 0,
+        valuationSource: 'ipo_sold',
+        isValued: true,
+        effectiveQuantity: 0
+      };
+    }
+    const issuePrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
+    const listPrice = inv.ipoListingPrice ?? issuePrice;
+    const rawSym = inv.symbol?.trim().toUpperCase();
+    const livePrice = (rawSym && marketPrices && marketPrices[rawSym] && marketPrices[rawSym].price > 0) ? marketPrices[rawSym].price : null;
+    const finalPrice = status === 'Listed' ? (livePrice ?? listPrice) : listPrice;
+    return {
+      marketValue: safeRound(currentQuantity * finalPrice),
+      valuationSource: livePrice ? 'live_market' : 'allotment_price',
+      isValued: true,
+      effectiveQuantity: currentQuantity,
+      effectivePrice: finalPrice
+    };
+  }
+
+  // 6. STOCKS & ETFs & OTHERS
+  const rawSym = inv.symbol?.trim().toUpperCase();
+  const nameResolved = inv.assetName ? resolveMarketSymbol(inv.assetName, cat as any).yahooSymbol : '';
+  const yahooSym = rawSym ? resolveMarketSymbol(rawSym, cat as any).yahooSymbol : nameResolved;
+  const cache = (rawSym && marketPrices && marketPrices[rawSym])
+    || (yahooSym && marketPrices && marketPrices[yahooSym])
+    || (nameResolved && marketPrices && marketPrices[nameResolved])
+    || (rawSym && marketPrices && marketPrices[`${rawSym}.NS`])
+    || (rawSym && marketPrices && marketPrices[`${rawSym}.BO`]);
+
+  if (cache && cache.price > 0) {
+    return {
+      marketValue: safeRound(currentQuantity * cache.price),
+      valuationSource: 'live_market',
+      isValued: true,
+      effectiveQuantity: currentQuantity,
+      effectivePrice: cache.price
+    };
+  }
+
+  if (inv.currentPrice !== undefined && inv.currentPrice !== null && inv.currentPrice > 0) {
+    return {
+      marketValue: safeRound(currentQuantity * inv.currentPrice),
+      valuationSource: 'stored_price',
+      isValued: true,
+      effectiveQuantity: currentQuantity,
+      effectivePrice: inv.currentPrice
+    };
+  }
+
+  // Fallback to purchase price / cost basis as valid valuation baseline when live quotes are unavailable
+  const fallbackPrice = (inv.buyPrice && inv.buyPrice > 0)
+    ? inv.buyPrice
+    : (averageBuyPrice > 0 ? averageBuyPrice : (totalInvestedCost > 0 && currentQuantity > 0 ? totalInvestedCost / currentQuantity : 0));
+
+  if (fallbackPrice > 0) {
+    return {
+      marketValue: safeRound(currentQuantity * fallbackPrice),
+      valuationSource: 'purchase_price_fallback',
+      isValued: true,
+      effectiveQuantity: currentQuantity,
+      effectivePrice: fallbackPrice
+    };
+  }
+
+  return {
+    marketValue: null,
+    valuationSource: 'unavailable',
+    isValued: false,
+    reason: 'Live market price and purchase price unavailable',
+    effectiveQuantity: currentQuantity
+  };
+};
+
 /**
  * Calculates financial metrics for a single investment holding.
  */
@@ -201,31 +569,27 @@ export const calculateHoldingMetrics = (
       }
     }
 
-    let manualCurrent: number | undefined = undefined;
-    if (inv.currentValue !== undefined && inv.currentValue !== null) {
-      const parsed = typeof inv.currentValue === 'number' ? inv.currentValue : parseFloat(inv.currentValue as any);
-      if (!isNaN(parsed) && isFinite(parsed)) {
-        manualCurrent = parsed;
-      }
-    }
-
-    const hasInvested = manualInvested > 0;
-    const hasCurrent = manualCurrent !== undefined && manualCurrent > 0;
+    const goldResult = getGoldHoldingValue(inv, marketPrices);
+    const qty = goldResult.weightGrams ?? 0;
+    const curPrice = goldResult.pricePerGram ?? inv.currentPricePerGram ?? null;
+    const calculatedCurrent = goldResult.marketValue ?? undefined;
+    const isValuationUnavailable = !goldResult.isValued || calculatedCurrent === undefined;
 
     return {
       ...inv,
-      quantity: inv.weightGrams ?? inv.quantity ?? 0,
+      quantity: qty,
       buyPrice: inv.buyPricePerGram ?? inv.buyPrice ?? 0,
-      currentPrice: inv.currentPricePerGram ?? inv.currentPrice ?? null,
-      investedAmount: manualInvested,
-      currentValue: manualCurrent,
+      currentPrice: curPrice !== null ? safeRound(curPrice) : null,
+      investedAmount: safeRound(manualInvested),
+      currentValue: calculatedCurrent,
       profitLoss: undefined,
       returnPercent: undefined,
       realizedPL: 0,
       totalPL: 0,
-      priceStatus: 'cached',
-      priceSource: 'Manual Entry',
-      isValuationUnavailable: !hasInvested && !hasCurrent
+      priceStatus: goldResult.isValued ? 'cached' : 'unavailable',
+      priceSource: goldResult.valuationSource,
+      isValuationUnavailable,
+      priceUnavailableReason: goldResult.reason
     };
   }
 
@@ -332,6 +696,7 @@ export const calculateHoldingMetrics = (
   let priceChange: number | undefined = undefined;
   let priceChangePercent: number | undefined = undefined;
   let isValuationUnavailable = false;
+  let priceUnavailableReason: string | undefined = undefined;
 
   const isIPO = category === 'IPOs';
   const ipoStatus = inv.ipoAllotmentStatus || 'Applied';
@@ -339,11 +704,16 @@ export const calculateHoldingMetrics = (
 
   if (category === 'Stocks' || category === 'ETFs' || (isIPO && ipoStatus === 'Listed')) {
     const rawSym = inv.symbol?.trim().toUpperCase();
-    if (rawSym && marketPrices && marketPrices[rawSym]) {
-      const cache = marketPrices[rawSym];
+    const yahooSym = rawSym ? resolveMarketSymbol(rawSym, category as any).yahooSymbol : '';
+    const cache = (rawSym && marketPrices && marketPrices[rawSym])
+      || (yahooSym && marketPrices && marketPrices[yahooSym])
+      || (rawSym && marketPrices && marketPrices[`${rawSym}.NS`])
+      || (rawSym && marketPrices && marketPrices[`${rawSym}.BO`]);
+
+    if (cache && cache.price > 0) {
       curPrice = cache.price;
       priceTimestamp = cache.timestamp;
-      priceSource = cache.source;
+      priceSource = cache.source || 'Yahoo Finance API';
       priceMarketState = cache.marketState;
       priceChange = cache.change;
       priceChangePercent = cache.changePercent;
@@ -357,25 +727,33 @@ export const calculateHoldingMetrics = (
         priceStatus = 'cached';
       }
     } else {
-      // No live or cached price exists in marketPrices map.
+      // No live quote in marketPrices map: resolve using stored manual price or purchase price fallback
       if (isIPO) {
-        // Fall back to listing price or allotment price for listed IPOs
         curPrice = inv.ipoListingPrice ?? inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
-        priceStatus = 'unavailable';
-        priceSource = 'IPO Listing Price Fallback';
+        if (curPrice > 0) {
+          priceStatus = 'cached';
+          priceSource = 'IPO Listing Price';
+        } else {
+          priceStatus = 'unavailable';
+          isValuationUnavailable = true;
+        }
       } else {
-        // Do NOT fall back to inv.currentPrice if it equals inv.buyPrice or is missing.
         if (inv.currentPrice !== undefined && inv.currentPrice !== null && inv.currentPrice > 0 && inv.currentPrice !== inv.buyPrice) {
           curPrice = inv.currentPrice;
           priceStatus = 'unavailable';
           priceSource = 'Manual Price';
-        } else if (inv.currentValue !== undefined && inv.currentValue !== null && inv.currentValue > 0 && inv.currentValue !== (currentQuantity * inv.buyPrice)) {
+        } else if (inv.currentValue !== undefined && inv.currentValue !== null && inv.currentValue > 0 && currentQuantity > 0 && inv.currentValue !== (currentQuantity * inv.buyPrice)) {
           curPrice = currentQuantity > 0 ? inv.currentValue / currentQuantity : 0;
           priceStatus = 'unavailable';
           priceSource = 'Manual Value';
         } else {
           priceStatus = 'unavailable';
           isValuationUnavailable = true;
+          if (!inv.symbol) {
+            priceUnavailableReason = 'No symbol provided';
+          } else {
+            priceUnavailableReason = 'Live market price unavailable';
+          }
         }
       }
     }
@@ -384,22 +762,64 @@ export const calculateHoldingMetrics = (
       curPrice = undefined;
       priceStatus = 'not_allocated';
       isValuationUnavailable = true;
+      priceUnavailableReason = 'IPO not yet listed';
     } else {
-      // Allotted but not listed yet: current price is allotment price
       curPrice = inv.ipoAllotmentPrice ?? inv.buyPrice ?? 0;
       priceStatus = 'cached';
       priceSource = 'Allotment Price';
     }
   } else {
-    // Non-Stock/ETF/IPO assets
-    priceStatus = 'cached';
-    priceSource = 'Manual Entry';
-    if (category === 'Mutual Funds') {
-      curPrice = inv.nav ?? inv.currentPrice ?? averageBuyPrice;
-    } else if (category === 'Gold' || category === 'Silver' || category === 'Platinum') {
-      curPrice = inv.currentPricePerGram ?? inv.currentPrice ?? averageBuyPrice;
+    // Non-Stock/ETF/IPO assets (Mutual Funds, Crypto, Gold, Silver, Bonds, FDs, etc.)
+    const rawSym = inv.symbol?.trim().toUpperCase();
+    if (category === 'Fixed Deposits' || category === 'Savings/Cash') {
+      priceStatus = 'cached';
+      priceSource = category === 'Fixed Deposits' ? 'Accrued Interest' : 'Cash Balance';
+      curPrice = category === 'Savings/Cash' ? 1 : undefined;
+    } else if (category === 'Mutual Funds') {
+      const livePrice = rawSym && marketPrices && marketPrices[rawSym]?.price;
+      const validNav = inv.nav && inv.nav > 0 ? inv.nav : undefined;
+      const validBuyPrice = inv.buyPrice && inv.buyPrice > 0 ? inv.buyPrice : undefined;
+
+      let validCurrentPrice: number | undefined = undefined;
+      if (inv.currentPrice && inv.currentPrice > 0) {
+        if (!validBuyPrice || inv.currentPrice <= validBuyPrice * 3) {
+          validCurrentPrice = inv.currentPrice;
+        }
+      }
+
+      curPrice = livePrice || validNav || validCurrentPrice || validBuyPrice || null;
+      if (curPrice === null || curPrice <= 0) {
+        priceStatus = 'unavailable';
+        isValuationUnavailable = true;
+        curPrice = undefined;
+      } else {
+        priceStatus = 'cached';
+        priceSource = 'NAV / Purchase Price';
+      }
+    } else if (category === 'Gold' || category === 'Silver') {
+      curPrice = (rawSym && marketPrices[rawSym]?.price)
+        ? marketPrices[rawSym].price
+        : (inv.currentPricePerGram ?? inv.currentPrice ?? inv.buyPrice ?? null);
+      if (curPrice === null || curPrice <= 0) {
+        priceStatus = 'unavailable';
+        isValuationUnavailable = true;
+        curPrice = undefined;
+      } else {
+        priceStatus = 'cached';
+        priceSource = 'Commodity Stored Price';
+      }
     } else {
-      curPrice = inv.currentPrice ?? averageBuyPrice;
+      curPrice = (rawSym && marketPrices[rawSym]?.price)
+        ? marketPrices[rawSym].price
+        : (inv.currentPrice ?? inv.buyPrice ?? null);
+      if (curPrice === null || curPrice <= 0) {
+        priceStatus = 'unavailable';
+        isValuationUnavailable = true;
+        curPrice = undefined;
+      } else {
+        priceStatus = 'cached';
+        priceSource = 'Stored / Purchase Price';
+      }
     }
   }
 
@@ -471,6 +891,7 @@ export const calculateHoldingMetrics = (
     priceChange: priceChange !== undefined ? safeRound(priceChange) : undefined,
     priceChangePercent: priceChangePercent !== undefined ? safeRound(priceChangePercent) : undefined,
     isValuationUnavailable,
+    priceUnavailableReason,
     appliedAmount,
     allocatedQuantity
   };
@@ -485,38 +906,70 @@ export const calculatePortfolioTotals = (
   let totalInvested = 0;
   let totalCurrent = 0;
   let totalRealized = 0;
+  let activeHoldingsCount = 0;
+  let unavailablePriceCount = 0;
+  let unpricedCapital = 0;
+  let pricedCapital = 0;
+
+  const missingAssets: HoldingMetrics[] = [];
+  const pricedAssets: HoldingMetrics[] = [];
 
   calculatedHoldings.forEach(h => {
-    // Exclude unallotted IPOs and completely unavailable valuations from aggregates
+    // Exclude unallotted IPOs
     if (h.category === 'IPOs') {
       const status = h.ipoAllotmentStatus || 'Applied';
       const isAllotted = status === 'Allotted' || status === 'Partially Allotted' || status === 'Listed' || status === 'Sold';
       if (!isAllotted) return;
     }
-    if (h.isValuationUnavailable) return;
+    if (h.quantity <= 0) return;
 
+    activeHoldingsCount++;
     totalInvested += h.investedAmount;
-    totalCurrent += h.currentValue ?? 0;
     totalRealized += h.realizedPL;
+
+    if (h.currentValue !== undefined && h.currentValue !== null) {
+      totalCurrent += h.currentValue;
+      pricedCapital += h.investedAmount;
+      pricedAssets.push(h);
+    } else {
+      unavailablePriceCount++;
+      unpricedCapital += h.investedAmount;
+      missingAssets.push(h);
+    }
   });
 
   totalInvested = safeRound(totalInvested);
   totalCurrent = safeRound(totalCurrent);
   totalRealized = safeRound(totalRealized);
+  unpricedCapital = safeRound(unpricedCapital);
+  pricedCapital = safeRound(pricedCapital);
 
-  const unrealizedPL = safeRound(totalCurrent - totalInvested);
+  const valuationStatus: 'complete' | 'partial' | 'unavailable' = 'complete';
+
+  const unrealizedPL = safeRound(totalCurrent - pricedCapital);
   const totalPL = safeRound(totalRealized + unrealizedPL);
-  const returnPercentage = totalInvested > 0 ? safeRound((unrealizedPL / totalInvested) * 100) : 0;
+  const returnPercentage = pricedCapital > 0 ? safeRound((unrealizedPL / pricedCapital) * 100) : 0;
   const overallReturnPercentage = totalInvested > 0 ? safeRound((totalPL / totalInvested) * 100) : 0;
 
   return {
+    valuationStatus,
+    totalActiveAssets: activeHoldingsCount,
+    pricedAssetsCount: pricedAssets.length,
+    missingPriceAssetsCount: unavailablePriceCount,
     totalInvested,
     totalCurrent,
+    pricedMarketValue: totalCurrent,
+    unpricedInvestedCapital: unpricedCapital,
     unrealizedPL,
     realizedPL: totalRealized,
     totalPL,
     returnPercentage,
-    overallReturnPercentage
+    overallReturnPercentage,
+    activeHoldingsCount,
+    unavailablePriceCount,
+    hasUnavailablePrices: unavailablePriceCount > 0,
+    missingAssets,
+    pricedAssets
   };
 };
 

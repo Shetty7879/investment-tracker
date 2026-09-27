@@ -232,7 +232,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0a0c14]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-850 px-1 py-2 flex items-center justify-around shadow-2xl">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0a0c14]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-850 px-2 py-2 flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth shadow-2xl">
         {navigationItems.map(item => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -241,15 +241,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
             <button
               key={item.id}
               onClick={() => navigateTo(item.id)}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition-all duration-150 active:scale-95 cursor-pointer ${
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-150 active:scale-95 cursor-pointer shrink-0 ${
                 isActive
-                  ? 'text-indigo-650 dark:text-indigo-400 font-bold'
+                  ? 'text-indigo-650 dark:text-indigo-400 font-bold bg-indigo-50/50 dark:bg-indigo-950/30'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
               title={cleanName}
             >
-              <Icon className={`h-5 w-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
-              <span className="text-[9px] font-bold tracking-wide hidden sm:block">{cleanName}</span>
+              <Icon className={`h-5 w-5 transition-transform duration-200 ${isActive ? 'scale-110 text-indigo-500' : ''}`} />
+              <span className="text-[10px] font-semibold tracking-wide whitespace-nowrap">{cleanName}</span>
             </button>
           );
         })}

@@ -216,9 +216,23 @@ import type { Dividend } from '../types/dividend';
 /**
  * Reusable dividend calculation utilities
  */
+/**
+ * Helper to check if a dividend status represents realized received income
+ */
+export const isRealizedDividendStatus = (status?: string): boolean => {
+  if (!status) return false;
+  const s = status.toUpperCase();
+  return s === 'RECEIVED' || s === 'PAID' || s === 'REINVESTED';
+};
+
+export const isUpcomingDividendStatus = (status?: string): boolean => {
+  if (!status) return false;
+  const s = status.toUpperCase();
+  return s === 'UPCOMING' || s === 'DECLARED' || s === 'ELIGIBLE';
+};
 
 /**
- * Calculate total dividend income (defaults to Paid & Reinvested Net Dividend income)
+ * Calculate total dividend income (defaults to Received, Paid & Reinvested Net Dividend income)
  */
 export const calculateTotalDividendIncome = (
   dividends: Dividend[] = [],
@@ -227,11 +241,10 @@ export const calculateTotalDividendIncome = (
   if (!dividends || !Array.isArray(dividends)) return 0;
   
   return dividends.reduce((sum, div) => {
-    // If includeUpcoming is false, count 'Paid' and 'Reinvested'
-    if (!options.includeUpcoming && div.status !== 'Paid' && div.status !== 'Reinvested') {
+    if (!options.includeUpcoming && !isRealizedDividendStatus(div.status)) {
       return sum;
     }
-    const val = options.useGross ? (div.grossDividend ?? 0) : (div.netDividend ?? 0);
+    const val = options.useGross ? (div.grossDividend ?? div.gross_amount ?? 0) : (div.netDividend ?? div.net_amount ?? 0);
     return sum + (val || 0);
   }, 0);
 };
@@ -242,7 +255,7 @@ export const calculateTotalDividendIncome = (
 export const calculateMonthlyDividendIncome = (
   dividends: Dividend[] = [],
   year?: number,
-  month?: number // 0-indexed or 1-12
+  month?: number // 0-indexed
 ) => {
   if (!dividends || !Array.isArray(dividends)) return 0;
   const now = new Date();
@@ -250,12 +263,12 @@ export const calculateMonthlyDividendIncome = (
   const targetMonth = month ?? now.getMonth();
 
   return dividends.reduce((sum, div) => {
-    if (div.status !== 'Paid' && div.status !== 'Reinvested') return sum;
-    const dateStr = div.paymentDate || div.dividendDate;
+    if (!isRealizedDividendStatus(div.status)) return sum;
+    const dateStr = div.paymentDate || div.payment_date || div.dividendDate || div.ex_date;
     if (!dateStr) return sum;
     const d = new Date(dateStr);
     if (d.getFullYear() === targetYear && d.getMonth() === targetMonth) {
-      return sum + (div.netDividend || 0);
+      return sum + (div.netDividend ?? div.net_amount ?? 0);
     }
     return sum;
   }, 0);
@@ -272,26 +285,33 @@ export const calculateYearlyDividendIncome = (
   const targetYear = year ?? new Date().getFullYear();
 
   return dividends.reduce((sum, div) => {
-    if (div.status !== 'Paid' && div.status !== 'Reinvested') return sum;
-    const dateStr = div.paymentDate || div.dividendDate;
+    if (!isRealizedDividendStatus(div.status)) return sum;
+    const dateStr = div.paymentDate || div.payment_date || div.dividendDate || div.ex_date;
     if (!dateStr) return sum;
     const d = new Date(dateStr);
     if (d.getFullYear() === targetYear) {
-      return sum + (div.netDividend || 0);
+      return sum + (div.netDividend ?? div.net_amount ?? 0);
     }
     return sum;
   }, 0);
 };
 
 /**
- * Calculate total upcoming/declared dividends
+ * Calculate total upcoming/declared dividends (must have future payment/record date and eligible quantity)
  */
 export const calculateUpcomingDividends = (dividends: Dividend[] = []) => {
   if (!dividends || !Array.isArray(dividends)) return 0;
+  const today = new Date().toISOString().split('T')[0];
 
   return dividends.reduce((sum, div) => {
-    if (div.status === 'Upcoming' || div.status === 'Declared') {
-      return sum + (div.netDividend || 0);
+    if (isUpcomingDividendStatus(div.status) && (div.status?.toUpperCase() !== 'NOT_ELIGIBLE')) {
+      const targetDate = div.paymentDate || div.payment_date || div.recordDate || div.record_date || div.dividendDate || div.ex_date;
+      if (targetDate && targetDate >= today) {
+        const qty = div.eligibleQuantity ?? div.quantity ?? 0;
+        if (qty > 0) {
+          return sum + (div.netDividend ?? div.net_amount ?? 0);
+        }
+      }
     }
     return sum;
   }, 0);
@@ -305,14 +325,14 @@ export const calculateDividendByAsset = (dividends: Dividend[] = []) => {
   const result: Record<string, { totalNet: number; totalGross: number; totalTax: number; count: number }> = {};
 
   dividends.forEach(div => {
-    if (div.status !== 'Paid' && div.status !== 'Reinvested') return;
-    const key = (div.symbol || div.assetName || 'Other').toUpperCase();
+    if (!isRealizedDividendStatus(div.status)) return;
+    const key = (div.symbol || div.assetName || div.asset_name || 'Other').toUpperCase();
     if (!result[key]) {
       result[key] = { totalNet: 0, totalGross: 0, totalTax: 0, count: 0 };
     }
-    result[key].totalNet += div.netDividend || 0;
-    result[key].totalGross += div.grossDividend || 0;
-    result[key].totalTax += div.tax || 0;
+    result[key].totalNet += div.netDividend ?? div.net_amount ?? 0;
+    result[key].totalGross += div.grossDividend ?? div.gross_amount ?? 0;
+    result[key].totalTax += div.tax ?? div.tds_amount ?? 0;
     result[key].count += 1;
   });
 
@@ -327,13 +347,13 @@ export const calculateDividendByPlatform = (dividends: Dividend[] = []) => {
   const result: Record<string, { totalNet: number; totalGross: number; count: number }> = {};
 
   dividends.forEach(div => {
-    if (div.status !== 'Paid' && div.status !== 'Reinvested') return;
-    const key = (div.broker || 'Other').toString();
+    if (!isRealizedDividendStatus(div.status)) return;
+    const key = (div.broker || div.platform || 'Other').toString();
     if (!result[key]) {
       result[key] = { totalNet: 0, totalGross: 0, count: 0 };
     }
-    result[key].totalNet += div.netDividend || 0;
-    result[key].totalGross += div.grossDividend || 0;
+    result[key].totalNet += div.netDividend ?? div.net_amount ?? 0;
+    result[key].totalGross += div.grossDividend ?? div.gross_amount ?? 0;
     result[key].count += 1;
   });
 
@@ -355,7 +375,7 @@ export const calculateHoldingDividends = (
   const cleanSymbol = symbol ? symbol.trim().toUpperCase() : null;
 
   const matches = dividends.filter(div => {
-    if (investmentId && div.investmentId === investmentId) return true;
+    if (investmentId && (div.investmentId === investmentId || div.asset_id === investmentId)) return true;
     if (cleanSymbol && div.symbol && div.symbol.trim().toUpperCase() === cleanSymbol) return true;
     return false;
   });
@@ -367,13 +387,15 @@ export const calculateHoldingDividends = (
   let lastDividend: Dividend | null = null;
 
   matches.forEach(div => {
-    if (div.status === 'Paid' || div.status === 'Reinvested') {
-      totalNet += div.netDividend || 0;
-      totalGross += div.grossDividend || 0;
-      totalTax += div.tax || 0;
+    if (isRealizedDividendStatus(div.status)) {
+      totalNet += div.netDividend ?? div.net_amount ?? 0;
+      totalGross += div.grossDividend ?? div.gross_amount ?? 0;
+      totalTax += div.tax ?? div.tds_amount ?? 0;
       count += 1;
     }
-    if (!lastDividend || new Date(div.dividendDate) > new Date(lastDividend.dividendDate)) {
+    const dDate = div.dividendDate || div.ex_date || div.paymentDate || div.payment_date || '';
+    const lastDDate = lastDividend ? (lastDividend.dividendDate || lastDividend.ex_date || lastDividend.paymentDate || lastDividend.payment_date || '') : '';
+    if (!lastDividend || new Date(dDate) > new Date(lastDDate)) {
       lastDividend = div;
     }
   });

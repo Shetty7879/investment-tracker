@@ -42,6 +42,8 @@ export interface AppContextType {
   updateDividend: (div: Dividend) => void;
   deleteDividend: (id: string) => void;
   markDividendPaid: (id: string) => void;
+  refreshDividendData: () => Promise<void>;
+  isRefreshingDividends: boolean;
   resetData: () => void;
   loadDemoData: () => void;
   clearDemoData: () => void;

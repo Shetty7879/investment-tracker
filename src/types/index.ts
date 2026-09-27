@@ -54,6 +54,10 @@ export interface Investment {
   id: string;
   assetName: string;
   symbol?: string;
+  isin?: string;
+  exchange?: string;
+  logoUrl?: string;
+  logo_url?: string;
   category: AssetType; // Preferred category key
   assetType: AssetType;  // Backward compatibility alias
   owner: 'Me' | 'Other';

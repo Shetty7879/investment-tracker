@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { InvestmentModal } from '../components/InvestmentModal';
 import { MoneyModal } from '../components/MoneyModal';
+import { AssetLogo } from '../components/AssetLogo';
 import { getAssetTypeBadgeStyle, getBrokerBadgeStyle } from '../utils/badgeStyles';
 import {
   isCommodityCategory,
@@ -333,13 +334,31 @@ export const Dashboard: React.FC = () => {
                         className="hover:bg-slate-55/50 dark:hover:bg-slate-800/15 transition-colors animate-fade-in"
                       >
                         <td className="px-4 py-3.5 font-sans font-semibold text-slate-900 dark:text-white whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <span>{inv.assetName}</span>
-                            {inv.isDemo && (
-                              <span className="text-[9px] font-sans font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">
-                                DEMO
-                              </span>
-                            )}
+                          <div className="flex items-center gap-2.5">
+                            <AssetLogo
+                              name={inv.assetName}
+                              symbol={inv.symbol}
+                              isin={inv.isin}
+                              exchange={inv.exchange}
+                              assetType={displayType}
+                              logoUrl={inv.logoUrl || inv.logo_url}
+                              size="sm"
+                            />
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-1.5">
+                                <span>{inv.assetName}</span>
+                                {inv.isDemo && (
+                                  <span className="text-[9px] font-sans font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded">
+                                    DEMO
+                                  </span>
+                                )}
+                              </div>
+                              {inv.symbol && (
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-normal">
+                                  {inv.symbol}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 whitespace-nowrap">
@@ -383,11 +402,22 @@ export const Dashboard: React.FC = () => {
                     className="bg-slate-50/50 dark:bg-slate-900/10 border border-slate-150 dark:border-slate-855 rounded-xl p-4 space-y-2.5 font-sans font-medium text-[11px]"
                   >
                     <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-xs font-sans font-semibold text-slate-900 dark:text-white m-0">
-                          {inv.assetName}
-                        </h4>
-                        <span className="block text-[10px] text-slate-405 dark:text-slate-550 mt-0.5">{inv.buyDate}</span>
+                      <div className="flex items-center gap-2.5">
+                        <AssetLogo
+                          name={inv.assetName}
+                          symbol={inv.symbol}
+                          isin={inv.isin}
+                          exchange={inv.exchange}
+                          assetType={displayType}
+                          logoUrl={inv.logoUrl || inv.logo_url}
+                          size="sm"
+                        />
+                        <div>
+                          <h4 className="text-xs font-sans font-semibold text-slate-900 dark:text-white m-0">
+                            {inv.assetName}
+                          </h4>
+                          <span className="block text-[10px] text-slate-405 dark:text-slate-550 mt-0.5">{inv.buyDate}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5">
                         {renderStatusBadge(status)}

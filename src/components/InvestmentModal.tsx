@@ -5,6 +5,7 @@ import type { Investment, AssetType, BrokerType } from '../types';
 import { X } from 'lucide-react';
 import { Stepper } from './stepper';
 import { DatePickerField } from './calendar-9';
+import { AssetLogo } from './AssetLogo';
 
 interface InvestmentModalProps {
   isOpen: boolean;
@@ -80,6 +81,10 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
   // ── Common fields ──────────────────────────────────────────────────
   const [name, setName] = useState('');
+  const [symbol, setSymbol] = useState('');
+  const [isin, setIsin] = useState('');
+  const [exchange, setExchange] = useState('NSE');
+  const [logoUrl, setLogoUrl] = useState('');
   const [type, setType] = useState('Stock');
   const [customType, setCustomType] = useState('');
   const [broker, setBroker] = useState<BrokerType>('Dhan');
@@ -247,6 +252,10 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       const resolvedType = VALID_TYPES.includes(mappedType) ? mappedType : 'Other';
       setType(resolvedType);
       setName(investmentToEdit.assetName || '');
+      setSymbol(investmentToEdit.symbol || '');
+      setIsin(investmentToEdit.isin || '');
+      setExchange(investmentToEdit.exchange || 'NSE');
+      setLogoUrl(investmentToEdit.logoUrl || investmentToEdit.logo_url || '');
 
       const storedBroker = investmentToEdit.broker as BrokerType;
       setBroker(VALID_BROKERS.includes(storedBroker) ? storedBroker : 'Other');
@@ -378,6 +387,10 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     } else {
       // New investment – full reset
       setName('');
+      setSymbol('');
+      setIsin('');
+      setExchange('NSE');
+      setLogoUrl('');
       setType('Stock');
       setCustomType('');
       setBroker('Dhan');
@@ -592,6 +605,10 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
       payload = {
         assetName: name.trim(),
+        symbol: symbol.trim() || undefined,
+        isin: isin.trim() || undefined,
+        exchange: exchange || 'NSE',
+        logoUrl: logoUrl.trim() || undefined,
         category,
         assetType: category,
         broker,
@@ -641,6 +658,10 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
       payload = {
         assetName: name.trim(),
+        symbol: symbol.trim() || undefined,
+        isin: isin.trim() || undefined,
+        exchange: exchange || 'NSE',
+        logoUrl: logoUrl.trim() || undefined,
         category,
         assetType: category,
         broker,
@@ -737,17 +758,70 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
           {/* ── Investment Name / IPO / Company Name ── */}
           <div>
-            <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 mb-2 uppercase tracking-wider">
-              {isIPO ? '📋 IPO / Company Name *' : type === 'Fixed Deposit' ? 'Investment / FD Name *' : type === 'Other' ? 'Asset Description / Details *' : 'Investment Name *'}
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={isIPO ? 'e.g. ABC Technologies Ltd. IPO' : PLACEHOLDERS[type] || 'e.g. Reliance Industries'}
-              className={inputClass(errors.name)}
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-405 dark:text-slate-555 uppercase tracking-wider">
+                {isIPO ? '📋 IPO / Company Name *' : type === 'Fixed Deposit' ? 'Investment / FD Name *' : type === 'Other' ? 'Asset Description / Details *' : 'Investment Name *'}
+              </label>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                <span>Auto Logo Preview:</span>
+                <AssetLogo
+                  name={name}
+                  symbol={symbol}
+                  isin={isin}
+                  exchange={exchange}
+                  assetType={type}
+                  logoUrl={logoUrl}
+                  size="xs"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <AssetLogo
+                name={name}
+                symbol={symbol}
+                isin={isin}
+                exchange={exchange}
+                assetType={type}
+                logoUrl={logoUrl}
+                size="md"
+              />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={isIPO ? 'e.g. ABC Technologies Ltd. IPO' : PLACEHOLDERS[type] || 'e.g. Reliance Industries'}
+                  className={inputClass(errors.name)}
+                />
+              </div>
+            </div>
             {errors.name && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.name}</p>}
+
+            {/* Optional Symbol & ISIN Details */}
+            {(type === 'Stock' || type === 'ETF' || type === 'Mutual Fund' || type === 'Crypto' || type === 'IPO') && (
+              <div className="mt-3 grid grid-cols-2 gap-3 p-3 bg-slate-50/60 dark:bg-slate-900/30 border border-slate-150 dark:border-slate-800 rounded-xl text-xs">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Ticker / Symbol (Optional)</label>
+                  <input
+                    type="text"
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                    placeholder="e.g. RELIANCE / TATAGOLD"
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] px-2.5 py-1.5 text-xs text-slate-900 dark:text-white uppercase outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">ISIN Code (Optional)</label>
+                  <input
+                    type="text"
+                    value={isin}
+                    onChange={(e) => setIsin(e.target.value.toUpperCase())}
+                    placeholder="e.g. INE002A01018"
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0d0f17] px-2.5 py-1.5 text-xs text-slate-900 dark:text-white uppercase outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Type & Broker ── */}
